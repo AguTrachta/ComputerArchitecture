@@ -3,7 +3,6 @@
 module top
 #(
     parameter NB_DATA = 8,
-    parameter NB_OP   = 6
 )
 (
     input  wire                   i_clk,
@@ -18,6 +17,8 @@ module top
     output wire [6:0] o_seg,
     output wire [3:0] o_an
 );
+
+    localparam NB_OP   = 6;
 
     reg  signed [NB_DATA - 1 : 0] data_a; 
     reg  signed [NB_DATA - 1 : 0] data_b;
@@ -34,7 +35,7 @@ module top
         .o_result (alu_result)
     );
     
-    always@(posedge i_clk or posedge i_rst) begin
+    always@(posedge i_clk) begin
         
         if (i_rst) begin
             data_a <= 0;
