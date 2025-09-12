@@ -1,0 +1,56 @@
+\documentclass[a4paper,12pt]{article}
+
+% Codificación y lenguaje
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+
+% Paquetes esenciales
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{datetime}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{parskip}
+\usepackage{array}
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{hyperref}
+% Paquetes para código fuente
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Configuración del estilo de listings para código Arduino
+\lstdefinestyle{arduino}{
+  language=C++,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  stringstyle=\color{red},
+  numbers=left,
+  numberstyle=\tiny,
+  stepnumber=1,
+  numbersep=5pt,
+  backgroundcolor=\color{white},
+  frame=single,
+  breaklines=true,
+  captionpos=b
+}
+\lstset{style=arduino}
+
+% Márgenes del documento
+\geometry{left=3cm, right=2.5cm, top=3cm, bottom=3cm}
+
+\begin{document}
+
+% Incluir carátula (asegurate de que caratula.tex exista)
+\input{caratula.tex}
+
+
+\tableofcontents
+\clearpage
+
+\input{informe_alu.tex}
+
+\end{document}
