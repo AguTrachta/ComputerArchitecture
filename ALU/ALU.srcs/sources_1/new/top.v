@@ -13,8 +13,10 @@ module top
     input  wire                   i_btn_op,
     input  wire [NB_DATA - 1 : 0] i_sw_data,
     output wire [NB_DATA - 1 : 0] o_led_res,
-    output wire [NB_DATA - 1 : 0] o_led_now
-    
+    output wire [NB_DATA - 1 : 0] o_led_now,
+    // ports for display
+    output wire [6:0] o_seg,
+    output wire [3:0] o_an
 );
 
     reg  signed [NB_DATA - 1 : 0] data_a; 
@@ -50,4 +52,14 @@ module top
     assign o_led_now = i_sw_data;
     assign o_led_res = alu_result;
 
+    // value for 7seg 
+    wire [15:0] disp_val = {8'h00, alu_result[7:4], alu_result[3:0]};
+
+    sevenseg_hex u_disp (
+        .i_clk  (i_clk),
+        .i_rst  (i_rst),
+        .i_value(disp_val),
+        .o_seg  (o_seg),
+        .o_an   (o_an)
+    );
 endmodule

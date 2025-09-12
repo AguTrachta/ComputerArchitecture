@@ -9,8 +9,8 @@
 
 module alu
 #(
-    parameter NB_DATA = 8,  // Cantidad de bits de datos
-    parameter NB_OP   = 6   // Cantidad de bits para el operador
+    parameter NB_DATA = 8,  // Data bits 
+    parameter NB_OP   = 6   // Data bits for operators 
 )
 (
     input  wire signed  [NB_DATA - 1 : 0] i_data_a,

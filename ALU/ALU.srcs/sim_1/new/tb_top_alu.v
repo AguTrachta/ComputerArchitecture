@@ -29,13 +29,17 @@ module tb_top_alu;
     reg  btn_a=0, btn_b=0, btn_op=0;
     reg  [NB_DATA-1:0] sw=0;
     wire [NB_DATA-1:0] led_res, led_now;
+    wire [6:0] seg;
+    wire [3:0] an;
     
     top #(.NB_DATA(NB_DATA), .NB_OP(NB_OP)) dut (
         .i_clk(clk), .i_rst(rst),
         .i_btn_a(btn_a), .i_btn_b(btn_b), .i_btn_op(btn_op),
         .i_sw_data(sw),
         .o_led_res(led_res),
-        .o_led_now(led_now)
+        .o_led_now(led_now),
+        .o_seg(seg),
+        .o_an(an)
     );
     
     
