@@ -2,7 +2,7 @@
 
 module top
 #(
-    parameter NB_DATA = 8,
+    parameter NB_DATA = 8
 )
 (
     input  wire                   i_clk,
@@ -14,11 +14,13 @@ module top
     output wire [NB_DATA - 1 : 0] o_led_res,
     output wire [NB_DATA - 1 : 0] o_led_now,
     // ports for display
-    output wire [6:0] o_seg,
-    output wire [3:0] o_an
+    output wire [CANT_SEGMENTS-1 : 0] o_seg,
+    output wire [CANT_DISPLAY-1 : 0] o_an
 );
 
     localparam NB_OP   = 6;
+    localparam CANT_DISPLAY  = 4;
+    localparam CANT_SEGMENTS = 7;
 
     reg  signed [NB_DATA - 1 : 0] data_a; 
     reg  signed [NB_DATA - 1 : 0] data_b;

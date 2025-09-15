@@ -1,0 +1,64 @@
+\section{Marco teórico}
+
+\subsection{La ALU en el contexto de un procesador}
+La Unidad Aritmético-Lógica (ALU) es el bloque funcional encargado de ejecutar operaciones aritméticas, lógicas y de desplazamiento sobre operandos binarios. En un procesador, la ALU recibe los datos desde el banco de registros y ejecuta la operación seleccionada por la unidad de control. Su salida alimenta de vuelta el banco de registros y/o el camino de datos (bus) para su posterior uso. 
+En arquitecturas \textit{RISC}, la ALU suele implementar un conjunto mínimo pero completo de operaciones combinacionales de un ciclo, mientras que operaciones más complejas (multiplicación, división) pueden resolverse por hardware dedicado o microcódigo.
+
+\subsection{Representación de datos: complemento a dos y \texttt{signed/unsigned}}
+En hardware digital, los enteros con signo suelen representarse en \textit{complemento a dos}. Para un ancho de palabra $N$, el rango representable es:
+\[
+[-2^{N-1}, \; 2^{N-1}-1]
+\]
+En Verilog, declarar un bus como \texttt{signed} hace que las operaciones aritméticas y de desplazamiento aritmético consideren el bit más significativo (MSB) como bit de signo. Para operaciones lógicas (\texttt{\&}, \texttt{|}, \texttt{\^{}}) el signo no afecta el resultado, pero sí es relevante en sumas/restas y corrimientos aritméticos.
+
+\subsection{Operaciones implementadas}
+La ALU de este trabajo implementa las siguientes operaciones (las etiquetas son códigos de 6 bits que representan la operación seleccionada por \texttt{i\_op}):
+
+\begin{center}
+\begin{tabular}{|c|c|l|}
+\hline
+\textbf{Código} & \textbf{Mnemónico} & \textbf{Descripción} \\
+\hline
+100000 & ADD & Suma de \texttt{i\_data\_a} e \texttt{i\_data\_b} (enteros con signo). \\
+100010 & SUB & Resta \texttt{i\_data\_a - i\_data\_b} (con signo). \\
+100100 & AND & AND bit a bit. \\
+100101 & OR  & OR bit a bit. \\
+100110 & XOR & XOR bit a bit. \\
+000011 & SRA & Corrimiento a derecha \textbf{aritmético}: preserva el bit de signo. \\
+000010 & SRL & Corrimiento a derecha \textbf{lógico}: ingresa ceros por la izquierda. \\
+100111 & NOR & NOR bit a bit: \texttt{\textasciitilde (A | B)}. \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Corrimientos: aritmético vs. lógico}
+\begin{itemize}
+    \item \textbf{SRA} (Arithmetic Right Shift) preserva el bit de signo: si el operando es negativo, se rellenan unos por la izquierda. Esto aproxima una división entre 2 para enteros con signo (redondeo hacia $-\infty$ en representación a dos).
+    \item \textbf{SRL} (Logical Right Shift) inserta ceros por la izquierda, apropiado para datos sin signo o para manipulación de campos de bits.
+\end{itemize}
+Al parametrizar el ancho de dato a $N$ bits, el corrimiento máximo significativo es $N-1$. Es buena práctica enmascarar la magnitud de corrimiento con $\log_2(N)$ bits para evitar comportamientos dependientes de la herramienta:
+\[
+\texttt{shift\_amt} = \texttt{i\_data\_b[} \lceil\log_2(N)\rceil \texttt{-1:0]}
+\]
+
+\subsection{Parametrización por ancho de datos}
+La ALU se parametriza mediante \texttt{NB\_DATA} (ancho de datos) y \texttt{NB\_OP} (ancho del código de operación). Esto permite reutilizar el diseño para 8, 16 o más bits cambiando sólo parámetros de síntesis, sin modificar el cuerpo del módulo.
+
+\subsection{Señales de estado (flags) y saturación (consideraciones)}
+En esta práctica no se implementan \textit{flags} (Carry, Zero, Overflow, Negative) ni saturación; el resultado aritmético se trunca a \texttt{NB\_DATA} bits (comportamiento de \textit{wrap-around}). En extensiones futuras se pueden agregar:
+\begin{itemize}
+    \item \textbf{Zero}: \texttt{o\_result == 0}
+    \item \textbf{Negative}: \texttt{o\_result[NB\_DATA-1]}
+    \item \textbf{Carry/Overflow}: a partir del bit extra en la suma/resta.
+    \item \textbf{Saturación}: limitar el resultado al máximo/mínimo representable.
+\end{itemize}
+
+\subsection{Multiplexado de display de 7 segmentos}
+La Basys 3 posee 4 dígitos de 7 segmentos con \textit{ánodo común}, controlados por líneas \texttt{o\_an} (bajo activo) y segmentos \texttt{o\_seg} (bajo activo). Se multiplexan los dígitos activando uno por vez a alta velocidad. 
+En este diseño:
+\begin{itemize}
+    \item Se usa un contador de 16 bits (\texttt{div}) a 100\,MHz.
+    \item La selección \texttt{sel = div[15:14]} genera 4 estados, uno por dígito.
+    \item La tasa de avance de estados es $\frac{100\text{ MHz}}{2^{14}} \approx 6103$\,Hz; el refresco por dígito es $\frac{6103}{4} \approx 1526$\,Hz, suficiente para evitar parpadeo.
+    \item Se muestra el \textbf{resultado} de la ALU en hexadecimal (2 dígitos activos; los superiores en cero).
+\end{itemize}

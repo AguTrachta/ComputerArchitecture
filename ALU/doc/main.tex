@@ -20,6 +20,7 @@
 % Paquetes para código fuente
 \usepackage{listings}
 \usepackage{xcolor}
+\usepackage{amsmath}  
 
 % Configuración del estilo de listings para código Arduino
 \lstdefinestyle{arduino}{
@@ -44,13 +45,16 @@
 
 \begin{document}
 
-% Incluir carátula (asegurate de que caratula.tex exista)
+
 \input{caratula.tex}
-
-
-\tableofcontents
+\input{indice.tex}
 \clearpage
-
-\input{informe_alu.tex}
+\input{introduccion.tex}
+\clearpage
+\input{objetivos.tex}
+\clearpage
+\input{marco_teorico.tex}
+\clearpage
+\input{desarrollo.tex}
 
 \end{document}

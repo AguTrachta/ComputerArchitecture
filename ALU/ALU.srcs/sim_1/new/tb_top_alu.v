@@ -32,7 +32,7 @@ module tb_top_alu;
     wire [6:0] seg;
     wire [3:0] an;
     
-    top #(.NB_DATA(NB_DATA), .NB_OP(NB_OP)) dut (
+    top #(.NB_DATA(NB_DATA)) dut (
         .i_clk(clk), .i_rst(rst),
         .i_btn_a(btn_a), .i_btn_b(btn_b), .i_btn_op(btn_op),
         .i_sw_data(sw),

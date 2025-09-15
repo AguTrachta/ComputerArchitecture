@@ -28,7 +28,7 @@ module alu
     localparam SRL = 6'b000010; // Logic Right Shift
     localparam NOR = 6'b100111;
 
-    reg signed [NB_DATA : 0] r_result;
+    reg signed [NB_DATA : 0] r_result = 0;
     
     always @(*) begin
     

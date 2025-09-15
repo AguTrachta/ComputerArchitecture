@@ -1,0 +1,28 @@
+\babel@toc {spanish}{}\relax 
+\contentsline {section}{\numberline {1}Introducción}{2}{section.1}%
+\contentsline {section}{\numberline {2}Objetivos}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}Objetivo general}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}Objetivos específicos}{3}{subsection.2.2}%
+\contentsline {section}{\numberline {3}Marco teórico}{4}{section.3}%
+\contentsline {subsection}{\numberline {3.1}La ALU en el contexto de un procesador}{4}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Representación de datos: complemento a dos y \texttt {signed/unsigned}}{4}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Operaciones implementadas}{4}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}Corrimientos: aritmético vs. lógico}{4}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}Parametrización por ancho de datos}{5}{subsection.3.5}%
+\contentsline {subsection}{\numberline {3.6}Señales de estado (flags) y saturación (consideraciones)}{5}{subsection.3.6}%
+\contentsline {subsection}{\numberline {3.7}Multiplexado de display de 7 segmentos}{5}{subsection.3.7}%
+\contentsline {section}{\numberline {4}Desarrollo}{6}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Descripción general de la arquitectura}{6}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}ALU: consideraciones de diseño}{6}{subsection.4.2}%
+\contentsline {paragraph}{Interfaz y parámetros.}{6}{paragraph*.1}%
+\contentsline {paragraph}{Ruta de datos interna.}{6}{paragraph*.2}%
+\contentsline {paragraph}{Operaciones de corrimiento.}{6}{paragraph*.3}%
+\contentsline {paragraph}{Estilo de codificación.}{6}{paragraph*.4}%
+\contentsline {subsection}{\numberline {4.3}TOP: captura de entradas y ruteo de salidas}{7}{subsection.4.3}%
+\contentsline {paragraph}{Captura de operandos y operación.}{7}{paragraph*.5}%
+\contentsline {paragraph}{Visualización en LEDs y display.}{7}{paragraph*.6}%
+\contentsline {subsection}{\numberline {4.4}Módulos de visualización}{7}{subsection.4.4}%
+\contentsline {paragraph}{\texttt {hex\_to\_sseg}.}{7}{paragraph*.7}%
+\contentsline {paragraph}{\texttt {sevenseg\_hex}.}{7}{paragraph*.8}%
+\contentsline {subsection}{\numberline {4.5}Banco de pruebas (\textit {testbench})}{7}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}Integración con la placa Basys 3 (resumen)}{8}{subsection.4.6}%
