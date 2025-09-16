@@ -31,3 +31,6 @@
 \contentsline {subsection}{\numberline {6.1}ALU}{10}{subsection.6.1}%
 \contentsline {subsection}{\numberline {6.2}Módulo de visualización (\texttt {sevenseg\_hex})}{10}{subsection.6.2}%
 \contentsline {subsection}{\numberline {6.3}Módulo \texttt {top}}{11}{subsection.6.3}%
+\contentsline {section}{\numberline {7}Prueba en hardware real (FPGA Basys 3)}{12}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Secuencia de pruebas}{12}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Resultados}{12}{subsection.7.2}%
