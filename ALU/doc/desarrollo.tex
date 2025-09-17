@@ -1,0 +1,60 @@
+\section{Desarrollo}
+
+\subsection{Descripción general de la arquitectura}
+La arquitectura implementada se compone de cinco bloques principales:
+\begin{enumerate}
+    \item \textbf{ALU}: bloque combinacional parametrizable que ejecuta las operaciones definidas por \texttt{i\_op}.
+    \item \textbf{TOP}: bloque secuencial que registra operandos A/B y el código de operación a partir de los switches y botones de la Basys 3; además enruta resultados a LEDs y display.
+    \item \textbf{Hex\_to\_sseg}: decodifica un nibble hexadecimal (0--F) a segmentos (bajo activo).
+    \item \textbf{SevenSeg\_hex}: multiplexa cuatro dígitos, selecciona el nibble a mostrar y controla \texttt{o\_an}/\texttt{o\_seg}.
+    \item \textbf{Testbench}: banco de prueba autocontenible que aplica estímulos representativos y observa salidas.
+\end{enumerate}
+
+\subsection{ALU: consideraciones de diseño}
+\paragraph{Interfaz y parámetros.}
+La ALU recibe dos operandos \texttt{signed} de \texttt{NB\_DATA} bits y un código de operación de \texttt{NB\_OP} bits. La salida \texttt{o\_result} es \texttt{signed} y del mismo ancho que los operandos.
+
+\paragraph{Ruta de datos interna.}
+Se utiliza un registro interno \texttt{r\_result} de \texttt{NB\_DATA+1} bits para computar resultados de suma/resta con un bit extra (posible acarreo/overflow). Finalmente se asigna a \texttt{o\_result} truncando a \texttt{NB\_DATA} bits (sin saturación).
+
+\paragraph{Operaciones de corrimiento.}
+\begin{itemize}
+    \item \textbf{SRA}: \verb|i_data_a >>> i_data_b|. 
+    Al ser \verb|i_data_a| \texttt{signed}, el operador \verb|>>>| replica el bit de signo. 
+
+    \item \textbf{SRL}: se fuerza lógico enmascarando el corrimiento:
+    \lstinline|$unsigned(i_data_a) >> i_data_b[$clog2(NB_DATA)-1:0]|.
+\end{itemize}
+
+\begin{sloppypar}
+\textit{Recomendación de robustez:} también enmascarar el corrimiento en SRA con \texttt{i\_data\_b[\$clog2(NB\_DATA)-1:0]} para hacer explícito el límite del ancho, evitando dependencias de implementación.
+\end{sloppypar}
+
+\paragraph{Estilo de codificación.}
+El bloque es combinacional (\texttt{always @(*)}) con asignaciones bloqueantes para la lógica interna; las señales de salida se asignan por \texttt{assign}. Este estilo evita \textit{latches} y facilita el mapeo a LUTs/sumadores del FPGA.
+
+\subsection{TOP: captura de entradas y ruteo de salidas}
+\paragraph{Captura de operandos y operación.}
+\begin{itemize}
+    \item \textbf{Reset}: síncrono con \texttt{i\_clk}; limpia registros \texttt{data\_a}, \texttt{data\_b}, \texttt{op}.
+    \item \textbf{Botones}: al detectar \texttt{i\_btn\_a}, \texttt{i\_btn\_b}, \texttt{i\_btn\_op} se capturan respectivamente \texttt{i\_sw\_data} (operandos) y \texttt{i\_sw\_data[NB\_OP-1:0]} (operación).
+    \item \textbf{Nota}: en hardware real, los botones \textit{rebotan}. Este diseño funcional no incluye \textit{debounce}; para robustez en placa se recomienda añadir sincronización doble y filtro (p.ej., contador temporal).
+\end{itemize}
+
+\paragraph{Visualización en LEDs y display.}
+\begin{itemize}
+    \item \texttt{o\_led\_now} refleja en tiempo real \texttt{i\_sw\_data} (útil para cargar operandos/códigos).
+    \item \texttt{o\_led\_res} muestra el resultado de la ALU.
+    \item \textbf{Display 7-seg}: \texttt{disp\_val = \{8'h00, alu\_result[7:4], alu\_result[3:0]\}} muestra el resultado en dos dígitos hex; los dos dígitos altos quedan en cero. El punto decimal (\texttt{o\_dp}) permanece apagado.
+\end{itemize}
+
+\subsection{Módulos de visualización}
+\paragraph{\texttt{hex\_to\_sseg}.}
+Tabla de verdad que mapea un nibble (0--F) a segmentos \textbf{bajo activo}. La Basys 3 utiliza ánodos comunes por dígito y cátodos compartidos para segmentos, por eso la codificación de 0 es \texttt{7'b1000000} (todos los segmentos activos menos el punto).
+
+\paragraph{\texttt{sevenseg\_hex}.}
+\begin{itemize}
+    \item \textbf{Divisor}: contador de 16 bits a 100\,MHz. Con \texttt{sel = div[15:14]} se recorre cada dígito a $\sim$6.1\,kHz y cada dígito se refresca a $\sim$1.5\,kHz (sin parpadeo).
+    \item \textbf{Selección de nibble}: según \texttt{sel} se elige el nibble correspondiente de \texttt{i\_value}.
+    \item \textbf{Anodos}: \texttt{o\_an} es bajo activo; se activa sólo el dígito seleccionado.
+\end{itemize}
