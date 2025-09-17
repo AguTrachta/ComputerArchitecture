@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1757981745.082 "/home/agustin/Documents/facultad/arquitectura de computadoras/practico/ComputerArchitecture/ALU/doc/main.tex" "main.pdf" "main" 1757981749.72151 0
+["pdflatex"] 1758113134.38799 "/home/agustin/Documents/facultad/arquitectura de computadoras/practico/ComputerArchitecture/ALU/doc/main.tex" "main.pdf" "main" 1758113138.81642 0
   "/etc/texmf/web2c/texmf.cnf" 1757966325.05432 475 c0e671620eb5563b2130f56340a5fde8 ""
   "/home/agustin/Documents/facultad/arquitectura de computadoras/practico/ComputerArchitecture/ALU/doc/main.tex" 1757981464.16446 1312 9808e7801161ac541d104276663be29f ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
@@ -133,7 +133,7 @@
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1757966360 5523761 bcc72c8355e34cde83fa1383337c30d8 ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1757966589 3607885 120ed5c29318fd811e55b3c253e0f90e ""
   "arquitectura.tex" 1757980996.15244 2297 7a21a04eb8d37bc0cccbcf8c25f7295a ""
-  "caratula.tex" 1757671866.53215 878 1cf8292be66677a043511e5f8377bb47 ""
+  "caratula.tex" 1758112976.01372 937 416b97de4c54e2bb72e1c4a464ff1fb7 ""
   "desarrollo.tex" 1757980322.64841 4313 99660c0d1858ca73b2b3bb674332de06 ""
   "img/alu.png" 1757980911.99644 65678 41ddedc39db6ae93385695b15acdd659 ""
   "img/disp.png" 1757980941.64444 40807 c1edacca5b5e03270ef30d323b08b41a ""
@@ -150,11 +150,11 @@
   "img/top.png" 1757980968.08844 69004 0adfc677d01bda46a5c4115114d67164 ""
   "indice.tex" 1757965168.8063 16 f84fe46f1a4fbd3ea00e9cc12e2be653 ""
   "introduccion.tex" 1757965184.4543 898 bfdf0783133c6f93feb3b4fdc7258da0 ""
-  "main.aux" 1757981749.40447 7710 e27526d33713cde74463e9e735d1a6c2 "pdflatex"
-  "main.out" 1757981749.40847 5344 6c68ccee3e361cd7ddc0330437502544 "pdflatex"
+  "main.aux" 1758113138.52173 7710 e27526d33713cde74463e9e735d1a6c2 "pdflatex"
+  "main.out" 1758113138.52573 5344 6c68ccee3e361cd7ddc0330437502544 "pdflatex"
   "main.tex" 1757981464.16446 1312 9808e7801161ac541d104276663be29f ""
-  "main.toc" 1757981749.40847 3105 d6e8effc48f1d865a023d5144992fcfd "pdflatex"
-  "marco_teorico.tex" 1757969432.81997 4723 f675be5990a0e19d2a173c7c87cc75de ""
+  "main.toc" 1758113138.52573 3105 d6e8effc48f1d865a023d5144992fcfd "pdflatex"
+  "marco_teorico.tex" 1758113132.00973 4722 dcce4fb0b995d4b91aedd3e327cab295 ""
   "objetivos.tex" 1757965195.6143 667 f63fc0bf8e65038e4e1aa3de63edfb56 ""
   "prueba_fpga.tex" 1757981739.36047 2938 c88c5aef26cc7f1d4853ff67ceb99763 ""
   "simulacion.tex" 1757980634.56043 1924 175a99c1b89045471b6abba1f60b5ebc ""
