@@ -1,0 +1,14 @@
+# Vivado folders
+ALU.cache/
+ALU.hw/
+ALU.ip_user_files/
+ALU.sim/
+ALU.runs/
+ALU.xpr
+
+# Only allow tex, pdf, png, and jpg files in doc folder, ignore all others
+doc/*
+!doc/*.tex
+!doc/*.pdf
+!doc/*.png
+!doc/*.jpg
