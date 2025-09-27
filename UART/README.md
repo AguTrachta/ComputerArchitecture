@@ -1,4 +1,4 @@
-# ALU on Basys3 (Artix-7)
+# UART on Basys3 (Artix-7)
 
 ## Overview
 
