@@ -61,6 +61,9 @@ module fifo #(
                 r_ptr_next = r_ptr_reg + 1;
                 // count no cambia
             end
+            2'b00: begin
+                // nada
+            end
         endcase
     end
 

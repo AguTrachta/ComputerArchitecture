@@ -1,14 +1,11 @@
 `timescale 1ns / 1ps
 
 module baud_gen #(
-    parameter CLK_FREQ = 50000000,   // frecuencia del reloj FPGA (50 MHz default)
-    parameter BAUD_RATE = 19200      // baud rate
+    parameter integer DIVISOR = 163  // default p/50 MHz y 19200 baud
 )(
     input  wire clk, reset,
     output reg  sample_tick
 );
-
-    localparam integer DIVISOR = CLK_FREQ / (BAUD_RATE * 16);
 
     reg [$clog2(DIVISOR)-1:0] count_reg, count_next;
 
