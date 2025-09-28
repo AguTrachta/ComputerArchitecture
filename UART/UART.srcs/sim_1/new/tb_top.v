@@ -2,7 +2,7 @@
 
 module tb_top;
 
-    localparam BAUD_RATE  = 19200;
+    localparam BAUD_RATE  = 9600;
     localparam BIT_PERIOD = (1_000_000_000 / BAUD_RATE); // ns
 
     reg clk, reset;
@@ -10,18 +10,18 @@ module tb_top;
     wire tx;
 
     // DUT: el sistema completo UART + ALU
-    system_top dut (
+    top dut (
         .clk(clk),
         .reset(reset),
         .rx(rx),
-        .tx(tx),
-        .o_led_res()  // podés mirar el resultado en LEDs en HW, aquí lo ignoramos
+        .tx(tx)
+        //.o_led_res()  // podés mirar el resultado en LEDs en HW, aquí lo ignoramos
     );
 
     // Clock 50 MHz
     initial begin
         clk = 0;
-        forever #(10) clk = ~clk;
+        forever #(5) clk = ~clk;
     end
 
     // Dump para GTKWave
@@ -93,7 +93,9 @@ module tb_top;
     endtask
 
     initial begin
-        reset = 1; rx = 1;
+        rx = 1;
+        #5;
+        reset = 1;
         #(200); reset = 0;
 
         // Pruebas

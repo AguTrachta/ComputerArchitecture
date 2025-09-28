@@ -1,57 +1,38 @@
-module system_top (
+module interface #(
+    parameter FIFO_W = 8,
+    parameter NB_OP  = 6
+) (
     input  wire clk, reset,
-    input  wire rx,            // UART RX (desde PC)
-    output wire tx,            // UART TX (hacia PC)
-    output wire [7:0] o_led_res
+
+        // Conexión a FIFO RX
+    input  wire [FIFO_W-1:0] r_data,   // Datos del FIFO RX
+    input  wire              rx_empty, // Flag FIFO RX vacía
+    output reg               rd_uart,  // Señal para leer dato del FIFO RX
+
+    // Conexión a FIFO TX
+    input  wire              tx_full,  // Flag FIFO TX llena
+    output reg               wr_uart,  // Señal para escribir dato al FIFO TX
+
+    // Conexión a ALU
+    output wire [FIFO_W-1:0] o_data_a, // Salida interfaz - alu data a y b
+    output wire [FIFO_W-1:0] o_data_b,
+    output wire [NB_OP-1:0]  o_op      // Salida interfaz - alu op
 );
 
-    // UART interface
-    wire [7:0] r_data;
-    wire       rx_empty;
-    reg        rd_uart;
-    wire [7:0] w_data;
-    reg        wr_uart;
-    wire       tx_full;
-
     // ALU interface
-    reg  [7:0] data_a, data_b;
-    reg  [5:0] op;
-    wire [7:0] alu_result;
-
-    // UART full-duplex con FIFO
-    uart_top #(
-        .DBIT(8),
-        .SB_TICK(16),
-        .FIFO_W(8),
-        .FIFO_N(16)
-    ) uart_inst (
-        .clk(clk), .reset(reset),
-        .rx(rx), .tx(tx),
-        .rd_uart(rd_uart),
-        .r_data(r_data),
-        .rx_empty(rx_empty),
-        .wr_uart(wr_uart),
-        .w_data(w_data),
-        .tx_full(tx_full)
-    );
-
-    // ALU
-    alu alu_inst (
-        .i_data_a(data_a),
-        .i_data_b(data_b),
-        .i_op(op),
-        .o_result(alu_result)
-    );
+    reg  [FIFO_W-1:0] data_a, data_b;
+    reg  [NB_OP-1:0] op;
 
     // Control simple: máquina de estados para recibir 3 bytes
     localparam S_IDLE = 0, S_OP = 1, S_A = 2, S_B = 3, S_SEND = 4;
     reg [2:0] state_reg, state_next;
 
     always @(posedge clk, posedge reset) begin
-        if (reset)
+        if (reset) begin
             state_reg <= S_IDLE;
-        else
+        end else begin
             state_reg <= state_next;
+        end
     end
 
     always @* begin
@@ -81,17 +62,27 @@ module system_top (
                 wr_uart = 1;
                 state_next = S_IDLE;
             end
+            
+            default: state_next = S_IDLE;
+            
         endcase
     end
 
     // Guardar datos cuando leo
     always @(posedge clk) begin
-        if (!rx_empty && state_reg == S_OP) op     <= r_data[5:0];
+        if(reset) begin
+            data_a    <= {FIFO_W{1'b0}};
+            data_b    <= {FIFO_W{1'b0}};
+            op        <= {NB_OP{1'b0}};
+        end
+        if (!rx_empty && state_reg == S_OP) op     <= r_data[NB_OP-1:0];
         if (!rx_empty && state_reg == S_A)  data_a <= r_data;
         if (!rx_empty && state_reg == S_B)  data_b <= r_data;
     end
 
-    // Dato a enviar = resultado de la ALU
-    assign w_data    = alu_result;
-    assign o_led_res = alu_result;  // también en LEDs
+    // Conectar salidas
+    assign o_data_a   = data_a;
+    assign o_data_b   = data_b;
+    assign o_op       = op;
+    
 endmodule

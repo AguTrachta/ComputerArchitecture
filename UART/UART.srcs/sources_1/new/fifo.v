@@ -16,6 +16,7 @@ module fifo #(
 
     // Memoria interna
     reg [W-1:0] array_reg [0:N-1];
+    integer i;
 
     // Punteros y contador de elementos
     reg [ADDR_W-1:0] w_ptr_reg, w_ptr_next;
@@ -24,8 +25,12 @@ module fifo #(
 
     // Escritura síncrona
     always @(posedge clk) begin
-        if (wr && !full)
+        if (reset) begin
+            for (i = 0; i < N; i = i + 1)
+                array_reg[i] <= {W{1'b0}};
+        end else if (wr && !full) begin
             array_reg[w_ptr_reg] <= w_data;
+        end
     end
 
     // Registros de estado
@@ -60,6 +65,9 @@ module fifo #(
                 w_ptr_next = w_ptr_reg + 1;
                 r_ptr_next = r_ptr_reg + 1;
                 // count no cambia
+            end
+            2'b00: begin
+                // nada
             end
         endcase
     end

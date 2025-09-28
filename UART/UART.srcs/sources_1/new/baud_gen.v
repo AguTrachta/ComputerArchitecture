@@ -1,8 +1,8 @@
 `timescale 1ns / 1ps
 
 module baud_gen #(
-    parameter CLK_FREQ = 50000000,   // frecuencia del reloj FPGA (50 MHz default)
-    parameter BAUD_RATE = 19200      // baud rate
+    parameter CLK_FREQ = 100_000_000, // frecuencia del reloj FPGA (100 MHz default)
+    parameter BAUD_RATE = 9600        // baud rate
 )(
     input  wire clk, reset,
     output reg  sample_tick
