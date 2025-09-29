@@ -1,5 +1,6 @@
 #include "serial.h"
 #include "utils.h"
+#include "ui.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <glob.h>
@@ -38,18 +39,8 @@ void *receiver_thread(void *arg) {
 }
 
 void handle_sigint(int sig) {
-  (void)sig;
-  if (!uart_configured) {
-    // todavía no configuraste nada → salida inmediata
+    (void)sig;
     running = 0;
-    printf(
-        "\n[SALIDA] Se recibió Ctrl+C, cerrando antes de configuración...\n");
-    exit(0); // ⚠️ salir ya mismo
-  } else {
-    // ya configurado → sólo marcar running = 0
-    running = 0;
-    printf("\n[SALIDA] Se recibió Ctrl+C, cerrando...\n");
-  }
 }
 
 void print_usb_info(const char *device) {
@@ -296,70 +287,48 @@ void cleanup(int fd, glob_t *glob_result, pthread_t *rx_thread) {
 }
 
 int main() {
-  signal(SIGINT, handle_sigint);
+    struct sigaction sa;
+    sa.sa_handler = handle_sigint;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;   // reintenta syscalls bloqueantes
+    sigaction(SIGINT, &sa, NULL);
 
-  glob_t glob_result;
-  int choice = listar_dispositivos(&glob_result);
+    glob_t glob_result = {0};
+    int choice = listar_dispositivos(&glob_result);
 
-  const char *device = glob_result.gl_pathv[choice];
-  printf("Usando: %s\n", device);
+    const char *device = glob_result.gl_pathv[choice];
+    printf("Usando: %s\n", device);
 
-  int fd = open_serial_port(device, 115200);
-  if (fd < 0)
-    return 1;
+    int fd = open_serial_port(device, 115200);
+    if (fd < 0) return 1;
 
-  configurar_uart_interactivo(fd);
-  uart_configured = 1; // ✅ desde acá Ctrl+C ya no interrumpe configuración
+    configurar_uart_interactivo(fd);
+    uart_configured = 1;
 
-  pthread_t rx_thread;
-  thread_args args = {.fd = fd};
-  pthread_create(&rx_thread, NULL, receiver_thread, &args);
+    pthread_t rx_thread;
+    thread_args args = {.fd = fd};
+    pthread_create(&rx_thread, NULL, receiver_thread, &args);
 
-  char input[256];
+    // 🔹 Inicializar interfaz
+    ui_init();
 
-  printf(">> ");
-  fflush(stdout);
+    while (running) {
+        Operation op = ui_get_operation(&running);
+        if (!running) break;
+        // Armar paquete (opcode, A, B)
+        unsigned char packet[3];
+        packet[0] = op.opcode;
+        packet[1] = (unsigned char)op.A;
+        packet[2] = (unsigned char)op.B;
 
-  while (running) {
+        send_data(fd, (char *)packet); // usa tu función serial
 
-    fd_set set;
-    struct timeval timeout;
-    FD_ZERO(&set);
-    FD_SET(STDIN_FILENO, &set);
-
-    timeout.tv_sec = 1; // espera máximo 1s
-    timeout.tv_usec = 0;
-
-    int rv = select(STDIN_FILENO + 1, &set, NULL, NULL, &timeout);
-    if (rv == -1) {
-      if (errno == EINTR)
-        continue; // interrumpido por señal
-      perror("select");
-      break;
-    } else if (rv == 0) {
-      // timeout → reintenta el while, chequea running
-      continue;
-    } else {
-      ssize_t n = read(STDIN_FILENO, input, sizeof(input) - 1);
-      if (n == -1) {
-        if (errno == EINTR && !running)
-          break;  // Ctrl+C
-        continue; // otro error
-      }
-      if (n == 0)
-        break; // EOF
-
-      input[n] = '\0';
-      if (strncmp(input, "exit", 4) == 0)
-        break;
-
-      send_data(fd, input);
-
-      printf(">> ");
-      fflush(stdout);
+        mvprintw(15, 0, ">> TX: opcode=0x%02X A=%d B=%d\n", 
+                 op.opcode, op.A, op.B);
+        refresh();
     }
-  }
 
-  cleanup(fd, &glob_result, &rx_thread);
-  return 0;
+    ui_end();
+    cleanup(fd, &glob_result, &rx_thread);
+    return -1;
 }
