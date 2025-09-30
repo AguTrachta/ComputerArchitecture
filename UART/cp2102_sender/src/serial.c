@@ -51,13 +51,16 @@ int open_serial_port(const char *device, int baudrate) {
   return fd;
 }
 
-int send_data(int fd, const char *data) {
-  int n = write(fd, data, strlen(data));
-  if (n < 0) {
-    perror("Error enviando datos");
-    return -1;
-  }
-  return n;
+int send_data(int fd, const char *data, size_t len) {
+    ssize_t n = write(fd, data, len);
+    if (n < 0) {
+        perror("Error enviando datos");
+        return -1;
+    }
+    if ((size_t)n != len) {
+        fprintf(stderr, "Advertencia: se enviaron %zd/%zu bytes\n", n, len);
+    }
+    return (int)n;
 }
 
 int receive_data(int fd, char *buffer, int buf_size) {

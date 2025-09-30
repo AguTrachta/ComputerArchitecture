@@ -1,6 +1,7 @@
 #include "serial.h"
 #include "utils.h"
 #include "ui.h"
+#include "globals.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <glob.h>
@@ -12,6 +13,10 @@
 #include <sys/select.h>
 #include <termios.h>
 #include <unistd.h>
+#include <pthread.h>
+
+pthread_mutex_t ui_mtx = PTHREAD_MUTEX_INITIALIZER;
+volatile sig_atomic_t ui_ready = 0;
 
 typedef struct {
   int fd;
@@ -24,17 +29,31 @@ void *receiver_thread(void *arg) {
   thread_args *targs = (thread_args *)arg;
   char buffer[256];
 
+  // Esperar a que ncurses esté listo
+  while (!ui_ready && running) usleep(10000);
+
   while (running) {
     int n = receive_data(targs->fd, buffer, sizeof(buffer));
     if (n > 0) {
-      buffer[n] = '\0';
-      printf("[UART RX]: %s\n", buffer);
-      fflush(stdout);
+      pthread_mutex_lock(&ui_mtx);
+
+      int rows, cols;
+      getmaxyx(stdscr, rows, cols);
+      int rx_row = rows - 2;        // penúltima línea para logs
+      move(rx_row, 0);
+      clrtoeol();
+      printw("[UART RX] %d byte(s):", n);
+      for (int i = 0; i < n; i++) {
+        printw(" %02X", (unsigned char)buffer[i]);
+      }
+      refresh();
+
+      pthread_mutex_unlock(&ui_mtx);
     }
     usleep(100000); // 100ms
   }
 
-  printf("[UART RX] Hilo finalizado.\n");
+  // Evitá printf aquí (ya terminó ncurses)
   return NULL;
 }
 
@@ -305,12 +324,14 @@ int main() {
     configurar_uart_interactivo(fd);
     uart_configured = 1;
 
+    // 🔹 Inicializar interfaz ANTES del hilo RX
+    ui_init();
+    ui_ready = 1;
+
+    // 🔹 recién ahora lanzar el hilo RX
     pthread_t rx_thread;
     thread_args args = {.fd = fd};
     pthread_create(&rx_thread, NULL, receiver_thread, &args);
-
-    // 🔹 Inicializar interfaz
-    ui_init();
 
     while (running) {
         Operation op = ui_get_operation(&running);
@@ -321,11 +342,13 @@ int main() {
         packet[1] = (unsigned char)op.A;
         packet[2] = (unsigned char)op.B;
 
-        send_data(fd, (char *)packet); // usa tu función serial
+        send_data(fd, (char *)packet, 3); // usa tu función serial
 
-        mvprintw(15, 0, ">> TX: opcode=0x%02X A=%d B=%d\n", 
-                 op.opcode, op.A, op.B);
+        // Mostrar TX en la zona del menú (arriba)
+        pthread_mutex_lock(&ui_mtx);
+        mvprintw(15, 0, ">> TX: opcode=0x%02X A=%d B=%d   ", op.opcode, op.A, op.B);
         refresh();
+        pthread_mutex_unlock(&ui_mtx);
     }
 
     ui_end();
