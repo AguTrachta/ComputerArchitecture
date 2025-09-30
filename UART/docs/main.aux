@@ -1,0 +1,66 @@
+\relax 
+\providecommand \babel@aux [2]{\global \let \babel@toc \@gobbletwo }
+\@nameuse{bbl@beforestart}
+\catcode `"\active 
+\catcode `<\active 
+\catcode `>\active 
+\@nameuse{es@quoting}
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\babel@aux{spanish}{}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introducción}{3}{section.1}\protected@file@percent }
+\citation{libroUART}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Descripción general del sistema}{4}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Bloque \texttt  {top}}{4}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Esquemático general}{4}{subsection.2.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Diagrama de bloques de un UART completo \cite  {libroUART}.}}{4}{figure.1}\protected@file@percent }
+\newlabel{fig:uart-general}{{1}{4}{Diagrama de bloques de un UART completo \cite {libroUART}}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Flujo de datos}{5}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Generador de baudios (\texttt  {baud\_gen})}{6}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Principio de funcionamiento}{6}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Oversampling en UART}{6}{subsection.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Flujo interno}{6}{subsection.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Importancia en el sistema}{7}{subsection.3.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Receptor UART (\texttt  {uart\_rx})}{8}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Trama y convenciones}{8}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Señales y contadores internos}{8}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Máquina de estados y flujo temporal}{8}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{1) IDLE (espera de start)}{8}{paragraph*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{2) START (centrado de muestreo)}{8}{paragraph*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{3) DATA (muestreo de 8 bits)}{9}{paragraph*.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{4) STOP (validación y fin de trama)}{9}{paragraph*.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Diagrama de flujo de la FSM del receptor UART con oversampling a \(16\times \).}}{10}{figure.2}\protected@file@percent }
+\newlabel{fig:uart-rx-fsm}{{2}{10}{Diagrama de flujo de la FSM del receptor UART con oversampling a \(16\times \)}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Cronometría: instantes de muestreo}{10}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Parámetros y salidas}{11}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}Notas de diseño y posibles mejoras}{11}{subsection.4.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Transmisor UART (\texttt  {uart\_tx})}{12}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Principio de funcionamiento}{12}{subsection.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Máquina de estados}{12}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Flujo interno}{12}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}Comparación con el receptor}{12}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5}Señales principales}{13}{subsection.5.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Memoria FIFO (\texttt  {fifo})}{14}{section.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Inserción de una FIFO a la salida del receptor UART.}}{14}{figure.3}\protected@file@percent }
+\newlabel{fig:fifo-buffer}{{3}{14}{Inserción de una FIFO a la salida del receptor UART}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Estructura y señales}{14}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Punteros y contador}{14}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Escritura y lectura}{15}{subsection.6.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Escritura (lado productor).}{15}{paragraph*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Lectura (lado consumidor).}{15}{paragraph*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Lectura y escritura simultáneas}{15}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.5}Reset y mapeo en hardware}{15}{subsection.6.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.6}Manejo correcto del \emph  {handshake}}{15}{subsection.6.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Unidad Aritmético-Lógica (ALU)}{17}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}Operaciones soportadas}{17}{subsection.7.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Operaciones soportadas por la ALU.}}{17}{table.1}\protected@file@percent }
+\newlabel{tab:alu-ops}{{1}{17}{Operaciones soportadas por la ALU}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Rol en el sistema}{17}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Módulo de interfaz (\texttt  {interface})}{18}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Máquina de estados}{18}{subsection.8.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}Organización de datos}{18}{subsection.8.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}Integración en el sistema}{18}{subsection.8.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.4}Señales clave}{19}{subsection.8.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.5}Resumen}{19}{subsection.8.5}\protected@file@percent }
+\gdef \@abspage@last{20}

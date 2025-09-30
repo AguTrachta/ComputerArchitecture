@@ -1,0 +1,16 @@
+\section{Introducción}
+
+La comunicación serie es uno de los mecanismos más utilizados en sistemas digitales para transmitir información de manera simple y eficiente. Dentro de este esquema, el estándar \textbf{UART} (Universal Asynchronous Receiver/Transmitter) constituye una de las soluciones más difundidas debido a su simplicidad de implementación, bajo costo y compatibilidad con una amplia variedad de dispositivos.
+
+En este trabajo se presenta el diseño e implementación de un sistema digital basado en \textbf{UART}, desarrollado en lenguaje \textit{Verilog HDL}. El sistema no solo incluye los bloques clásicos de transmisión y recepción, sino que además incorpora:
+
+\begin{itemize}
+    \item \textbf{Un generador de baudios} para sincronizar la comunicación.
+    \item \textbf{Memorias FIFO} que permiten desacoplar los datos recibidos y transmitidos.
+    \item \textbf{Una Unidad Aritmético-Lógica (ALU)} encargada de procesar los operandos recibidos.
+    \item \textbf{Un bloque de interfaz} que organiza los datos provenientes del canal serie para dirigirlos a la ALU y reenviar los resultados.
+\end{itemize}
+
+El objetivo principal es demostrar cómo la arquitectura UART puede extenderse más allá de la simple comunicación, integrándose con módulos de procesamiento para construir sistemas digitales completos. En particular, se busca implementar un mecanismo mediante el cual se reciben instrucciones desde un puerto serie, se procesan mediante la ALU y los resultados se reenvían nuevamente al transmisor UART.
+
+El trabajo se organiza de la siguiente manera: primero se describen los módulos fundamentales en orden de ejecución (generador de baudios, receptor, FIFO, transmisor, ALU e interfaz). Posteriormente, se analiza la integración en el módulo \texttt{top}, se presentan las simulaciones y pruebas realizadas, y finalmente se discuten los resultados obtenidos junto con posibles mejoras.

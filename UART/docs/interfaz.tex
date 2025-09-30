@@ -1,0 +1,53 @@
+\section{Módulo de interfaz (\texttt{interface})}
+
+La interfaz es el bloque que conecta las FIFOs con la ALU. Su función es \textbf{interpretar los datos recibidos}, organizarlos en forma de instrucción (operación + operandos), y enviar el resultado hacia la FIFO de transmisión.
+
+\subsection{Máquina de estados}
+El comportamiento se basa en una máquina de estados sencilla. Cada transición depende de la disponibilidad de datos en la FIFO RX o de espacio libre en la FIFO TX.
+
+\begin{itemize}
+    \item \textbf{S\_IDLE}: espera a que la FIFO RX no esté vacía.
+    \item \textbf{S\_OP}: lee el primer byte recibido, que corresponde al código de operación de la ALU.
+    \item \textbf{S\_A}: lee el segundo byte, correspondiente al operando A.
+    \item \textbf{S\_B}: lee el tercer byte, correspondiente al operando B.
+    \item \textbf{S\_SEND}: cuando la FIFO TX no está llena, escribe el resultado proveniente de la ALU. Luego vuelve a \textbf{S\_IDLE}.
+\end{itemize}
+
+\subsection{Organización de datos}
+Cada operación enviada desde el PC o dispositivo maestro debe respetar el siguiente formato de 3 bytes consecutivos:
+\[
+\underbrace{\texttt{OP}}_{\text{código de operación}} \;\;
+\underbrace{\texttt{A}}_{\text{operando A}} \;\;
+\underbrace{\texttt{B}}_{\text{operando B}}
+\]
+
+La interfaz se encarga de:
+\begin{enumerate}
+    \item Leer secuencialmente estos tres bytes desde la FIFO RX.
+    \item Guardarlos en registros internos (\texttt{op}, \texttt{data\_a}, \texttt{data\_b}).
+    \item Enviar los valores a la ALU.
+    \item Escribir el resultado en la FIFO TX para su posterior transmisión.
+\end{enumerate}
+
+\subsection{Integración en el sistema}
+El módulo \texttt{interface} se encuentra entre la FIFO RX y la ALU, y entre la ALU y la FIFO TX.  
+Su rol es esencial porque:
+\begin{itemize}
+    \item Actúa como \textbf{consumidor} de la FIFO RX mediante la señal \texttt{rd\_uart}.
+    \item Actúa como \textbf{productor} de la FIFO TX mediante la señal \texttt{wr\_uart}.
+    \item Orquesta el flujo de instrucciones hacia la ALU y asegura que los resultados se almacenen correctamente para ser enviados.
+\end{itemize}
+
+\subsection{Señales clave}
+\begin{itemize}
+    \item \texttt{rd\_uart}: lectura de un byte desde la FIFO RX.
+    \item \texttt{wr\_uart}: escritura de un resultado en la FIFO TX.
+    \item \texttt{tx\_start}: señal que arranca la transmisión en el bloque \texttt{uart\_tx} siempre que la FIFO TX no esté vacía.
+\end{itemize}
+
+\subsection{Resumen}
+En conjunto, la interfaz convierte un flujo serie de bytes recibidos en una instrucción completa de la forma:
+\[
+\texttt{[operación, operando A, operando B]} \;\;\;\Rightarrow\;\;\; \texttt{resultado}
+\]
+y garantiza que este resultado se reenvíe a través del transmisor UART.
