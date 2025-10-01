@@ -45,6 +45,7 @@ void *receiver_thread(void *arg) {
       printw("[UART RX] %d byte(s):", n);
       for (int i = 0; i < n; i++) {
         printw(" %02X", (unsigned char)buffer[i]);
+        printw(" %d", (signed char)buffer[i]);
       }
       refresh();
 
