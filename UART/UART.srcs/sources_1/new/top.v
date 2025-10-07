@@ -29,9 +29,12 @@ module top #(
     wire       wr_uart;        // escribir dato a transmitir
     wire       tx_full;        // FIFO Tx llena
     // ALU Interface
-    wire [FIFO_W-1:0] data_a, data_b;
     wire [NB_OP-1:0] op;
     wire [FIFO_W-1:0] alu_result;
+    // --- Regfile 32x8 ---
+    wire [7:0] rf_rdata1, rf_rdata2, rf_wdata;
+    wire       rf_we;
+    wire [4:0] rf_waddr, rf_raddr1, rf_raddr2;
 
     //-----------------------
     // Baud rate generator
@@ -94,26 +97,51 @@ module top #(
     // ALU
     //-----------------------
     alu alu_inst (
-        .i_data_a(data_a),
-        .i_data_b(data_b),
+        .i_data_a(rf_rdata1),
+        .i_data_b(rf_rdata2),
         .i_op(op),
         .o_result(alu_result)
     );
 
-    //-----------------------
-    // ALU Interface
-    //-----------------------
-    interface #(.FIFO_W(FIFO_W)) iface_inst (
+    // -----------------------
+    // ALU Interface (nueva)
+    // -----------------------
+    rv_interface #(.FIFO_W(FIFO_W), .NB_OP(NB_OP)) iface_inst (
         .clk(clk), .reset(reset),
-        .rd_uart(rd_uart),
+
+        // FIFO RX
         .r_data(r_data),
         .rx_empty(rx_empty),
-        .wr_uart(wr_uart),
+        .rd_uart(rd_uart),
+
+        // FIFO TX
         .tx_full(tx_full),
-        .o_data_a(data_a),
-        .o_data_b(data_b),
-        .o_op(op)
+        .wr_uart(wr_uart),
+
+        // Regfile
+        .rf_we(rf_we),
+        .rf_waddr(rf_waddr),
+        .rf_wdata(rf_wdata),
+        .rf_raddr1(rf_raddr1),
+        .rf_raddr2(rf_raddr2),
+        .rf_rdata1(rf_rdata1),
+        .rf_rdata2(rf_rdata2),
+
+        // ALU
+        .o_op(op),
+        .alu_result_in(alu_result)
     );
 
+    // --- Regfile 32x8 ---
+    regfile #(.DATA_W(FIFO_W), .NREGS(32)) rf0 (
+        .clk(clk),
+        .raddr1(rf_raddr1),
+        .raddr2(rf_raddr2),
+        .rdata1(rf_rdata1),
+        .rdata2(rf_rdata2),
+        .we(rf_we),
+        .waddr(rf_waddr),
+        .wdata(rf_wdata)
+    );
 endmodule
 
