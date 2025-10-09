@@ -93,12 +93,24 @@ module top #(
         .tx(tx)
     );
 
-    //-----------------------
-    // ALU
-    //-----------------------
+    // -----------------------
+    // ALU con soporte R e I-type
+    // -----------------------
+    
+    // Señales internas para I-type (vienen del rv_interface / decoder)
+    wire signed [11:0] imm_i;
+    wire               is_itype;
+    
+    // Accedemos jerárquicamente al decoder dentro del rv_interface
+    assign imm_i    = iface_inst.dec_i.imm_i;     // inmediato de 12 bits
+    assign is_itype = iface_inst.dec_i.is_itype;  // flag de tipo I
+    
+    // Multiplexor: elige si usar registro rs2 o inmediato
+    wire [FIFO_W-1:0] alu_src_b = is_itype ? imm_i[7:0] : rf_rdata2;
+    
     alu alu_inst (
         .i_data_a(rf_rdata1),
-        .i_data_b(rf_rdata2),
+        .i_data_b(alu_src_b),
         .i_op(op),
         .o_result(alu_result)
     );

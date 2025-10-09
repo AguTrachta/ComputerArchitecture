@@ -33,14 +33,17 @@ module rv_interface #(
 
     // === Decoder R-type ===
     wire [4:0] rs1, rs2, rd;
-    wire       is_rtype;
+    wire       is_rtype, is_itype;
+    wire signed [11:0] imm_i;
     wire [NB_OP-1:0] alu_op;
 
     rv_decoder #(.NB_OP(NB_OP)) dec_i (
         .instr(instr),
         .rs1(rs1), .rs2(rs2), .rd(rd),
         .alu_op(alu_op),
-        .is_rtype(is_rtype)
+        .is_rtype(is_rtype),
+        .is_itype(is_itype),
+        .imm_i(imm_i)
     );
 
     assign o_op = alu_op;
@@ -67,8 +70,7 @@ module rv_interface #(
     end
 
     // =====================================================
-    // 2) *** ACÁ VA EL BLOQUE QUE ARMA instr CON 4 BYTES ***
-    //     Captura LSB-first: byte0->[7:0] ... byte3->[31:24]
+    // 2)  Captura LSB-first: byte0->[7:0] ... byte3->[31:24]
     // =====================================================
     always @(posedge clk) begin
         if (reset) begin
@@ -141,7 +143,7 @@ module rv_interface #(
 
             // Write-back a rd (si es R-type y rd!=x0)
             S_WB: begin
-                if (is_rtype && (rd != 5'd0)) begin
+                if ((is_rtype || is_itype) && (rd != 5'd0)) begin
                     rf_we    = 1'b1;
                     rf_waddr = rd;
                     rf_wdata = alu_result_in;   // <<< resultado real
