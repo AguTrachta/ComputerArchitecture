@@ -11,3 +11,4 @@ doc/*
 !doc/*.pdf
 !doc/*.png
 !doc/*.jpg
+!doc/img/
