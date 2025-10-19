@@ -1,0 +1,27 @@
+\section{Unidad Aritmético-Lógica (ALU)}
+
+La ALU es el bloque encargado de realizar operaciones aritméticas y lógicas sobre dos operandos de 8 bits.  
+Se controla mediante un código de operación de 6 bits que determina qué función ejecutar.  
+
+\subsection{Operaciones soportadas}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|c|}
+        \hline
+        Código (binario) & Operación & Descripción \\ \hline
+        100000 & ADD & Suma de \texttt{A + B} \\
+        100010 & SUB & Resta \texttt{A - B} \\
+        100100 & AND & AND bit a bit \\
+        100101 & OR  & OR bit a bit \\
+        100110 & XOR & XOR bit a bit \\
+        000011 & SRA & Desplazamiento aritmético a derecha \\
+        000010 & SRL & Desplazamiento lógico a derecha \\
+        100111 & NOR & NOR bit a bit \\ \hline
+    \end{tabular}
+    \caption{Operaciones soportadas por la ALU.}
+    \label{tab:alu-ops}
+\end{table}
+
+\subsection{Rol en el sistema}
+La ALU recibe como entradas dos datos (\texttt{data\_a}, \texttt{data\_b}) y un código de operación (\texttt{op}), generando un resultado de 8 bits que se almacena en la FIFO de transmisión.  
+Esto permite extender la comunicación UART más allá de la simple transferencia de bytes, agregando capacidad de procesamiento en hardware.

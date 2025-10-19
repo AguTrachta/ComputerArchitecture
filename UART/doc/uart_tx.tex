@@ -1,0 +1,44 @@
+\section{Transmisor UART (\texttt{uart\_tx})}
+
+El bloque \texttt{uart\_tx} es el encargado de serializar un dato paralelo de 8 bits y enviarlo a través de la línea \texttt{tx}, siguiendo la convención de trama UART: un bit de inicio, 8 bits de datos y un bit de parada (o más, según configuración).
+
+\subsection{Principio de funcionamiento}
+El transmisor se activa cuando recibe la señal \texttt{tx\_start}, lo que indica que existe un byte válido en su registro de entrada (\texttt{din}). A partir de ese momento, controla la línea \texttt{tx} mediante una máquina de estados finitos (FSM) que sigue la misma temporización definida por los pulsos de \texttt{sample\_tick} generados por el módulo \texttt{baud\_gen}.
+
+\subsection{Máquina de estados}
+El transmisor implementa los mismos cuatro estados que el receptor:
+\begin{itemize}
+    \item \textbf{IDLE}: la línea \texttt{tx} permanece en nivel alto. Espera que la señal \texttt{tx\_start} se active.
+    \item \textbf{START}: coloca la línea en nivel bajo durante 16 ticks para indicar el comienzo de la trama.
+    \item \textbf{DATA}: envía uno a uno los bits de datos, en orden \textit{LSB first}. Cada bit permanece estable durante 16 ticks.
+    \item \textbf{STOP}: fuerza la línea a nivel alto durante \texttt{SB\_TICK} ticks. Una vez cumplido, emite el pulso \texttt{tx\_done\_tick} y vuelve a \textbf{IDLE}.
+\end{itemize}
+
+\subsection{Flujo interno}
+El dato a transmitir se carga en un registro de desplazamiento (\texttt{tx\_shift\_reg}) cuando \texttt{tx\_start} se activa.  
+En cada ciclo de envío de bit:
+\begin{itemize}
+    \item El bit menos significativo del registro se coloca en la línea \texttt{tx}.
+    \item Al completarse los 16 ticks, el registro se desplaza a la derecha para preparar el siguiente bit.
+\end{itemize}
+
+\subsection{Comparación con el receptor}
+El \texttt{uart\_tx} utiliza la misma estructura general que el receptor:
+\begin{itemize}
+    \item Ambos cuentan con una FSM con los estados \textbf{IDLE}, \textbf{START}, \textbf{DATA} y \textbf{STOP}.
+    \item Ambos utilizan los pulsos de \texttt{sample\_tick} para sincronizar los instantes de transmisión o muestreo.
+\end{itemize}
+
+Las diferencias clave son:
+\begin{itemize}
+    \item El receptor \texttt{uart\_rx} reconstruye bits desde la línea serie hacia un registro, mientras que el transmisor hace el proceso inverso: toma un byte paralelo y lo serializa.
+    \item El transmisor siempre conoce los tiempos exactos en los que debe cambiar el valor de la línea, mientras que el receptor debe detectar el inicio de la trama y re-alinearse a partir de allí.
+\end{itemize}
+
+\subsection{Señales principales}
+\begin{itemize}
+    \item \textbf{\texttt{din}}: dato paralelo de entrada (8 bits).
+    \item \textbf{\texttt{tx}}: línea de transmisión serie.
+    \item \textbf{\texttt{tx\_start}}: pulso que indica al transmisor que debe enviar el byte cargado.
+    \item \textbf{\texttt{tx\_done\_tick}}: pulso de un ciclo de \texttt{clk} que indica que la transmisión finalizó.
+\end{itemize}

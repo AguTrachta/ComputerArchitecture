@@ -1,0 +1,73 @@
+\section{Interfaz, decoder y regfile}
+
+\subsection{Máquina de estados de la interfaz}
+
+La interfaz se rediseñó para recibir cuatro bytes por UART, ensamblar una instrucción de 32~bits y despachar su ejecución a través del \textit{decoder}, el \textit{regfile} y la ALU. La FSM emplea los siguientes estados:
+
+\begin{verbatim}
+localparam S_IDLE = 3'd0,
+           S_I0   = 3'd1,
+           S_I1   = 3'd2,
+           S_I2   = 3'd3,
+           S_I3   = 3'd4,
+           S_EX   = 3'd5,
+           S_WB   = 3'd6,
+           S_TX   = 3'd7;
+\end{verbatim}
+
+
+\begin{itemize}
+    \item \textbf{S\_IDLE (reposo).} Estado de espera tras \textit{reset}. Si la bandera de FIFO RX indica disponibilidad de dato (\texttt{\textasciitilde rx\_empty}), se inicia la secuencia de lectura y se transita a \textbf{S\_I0}.
+    \item \textbf{S\_I0, S\_I1, S\_I2 (fetch de bytes 0--2).} En cada uno de estos estados, cuando hay dato válido en FIFO RX y se aserta \texttt{rd\_uart}, se lee un byte y se almacena en el \textit{slice} correspondiente de la instrucción (LSB primero). Cada estado avanza al siguiente: \textbf{S\_I0}→\textbf{S\_I1}→\textbf{S\_I2}.
+    \item \textbf{S\_I3 (fetch del byte 3).} Se captura el cuarto byte (MSB) y, con la instrucción completa (\(\texttt{instr}[31{:}0]\)), se avanza a \textbf{S\_EX} para ejecutar.
+    \item \textbf{S\_EX (ejecución).} Se habilita el flujo hacia el \textit{decoder} para clasificar la instrucción y obtener campos (\texttt{rd}, \texttt{rs1}, \texttt{rs2}, \texttt{imm}) y el selector \texttt{alu\_op}. Con esta información, la interfaz coordina la lectura de operandos del \textit{regfile} y presenta \texttt{alu\_a}, \texttt{alu\_b} y \texttt{alu\_op} a la ALU. El estado siguiente es \textbf{S\_WB}.
+    \item \textbf{S\_WB (write-back).} Una vez estable el resultado de la ALU, si la instrucción es de tipo R/I y el destino es distinto de \(x0\), se habilita la escritura del \textit{regfile} (\texttt{we}, \texttt{waddr}=\texttt{rd}, \texttt{wdata}=\texttt{alu\_result}). Luego se transita a \textbf{S\_TX}.
+    \item \textbf{S\_TX (respuesta).} Si la FIFO de transmisión (\textbf{FIFO TX}) no está llena, se inserta un byte de respuesta (\texttt{w\_data}, típicamente \(\texttt{alu\_result}[7{:}0]\)) mediante un pulso \texttt{wr\_uart}. Concluida la inserción, la FSM retorna a \textbf{S\_IDLE}.
+\end{itemize}
+
+\newpage
+
+\subsection{Bloque secuencial de ensamblado de instrucción}
+
+El ensamblado de la palabra de 32~bits se realiza LSB\(\rightarrow\)MSB, tal como se indica:
+
+\begin{verbatim}
+case (state)
+  S_I0: if (!rx_empty && rd_uart) instr[7:0]   <= r_data;   // byte 0 (LSB)
+  S_I1: if (!rx_empty && rd_uart) instr[15:8]  <= r_data;   // byte 1
+  S_I2: if (!rx_empty && rd_uart) instr[23:16] <= r_data;   // byte 2
+  S_I3: if (!rx_empty && rd_uart) instr[31:24] <= r_data;   // byte 3 (MSB)
+  default: ;
+endcase
+\end{verbatim}
+
+Un segundo bloque secuencial independiente actualiza el registro de estado (\texttt{state}) con \texttt{state\_n} en el flanco de reloj, desacoplando la lógica combinacional de siguiente estado del almacenamiento sincrónico.
+
+\subsection{Decodificación de la instrucción}
+
+El \textit{decoder} clasifica la instrucción observando \texttt{opcode}/\texttt{funct3}/\texttt{funct7} y expone:
+\begin{itemize}
+  \item Formato: \(\texttt{is\_rtype}\) (registro--registro) o \(\texttt{is\_itype}\) (registro--inmediato).
+  \item Campos: \(\texttt{rd}\), \(\texttt{rs1}\), \(\texttt{rs2}\); e \(\texttt{imm\_i}\) (signado) para tipo I.
+  \item Selector de operación de ALU: \(\texttt{alu\_op}\).
+\end{itemize}
+En particular, si \(\texttt{opcode} = \texttt{7'b0110011}\) la instrucción es \textbf{tipo R} (ALU reg--reg), y si \(\texttt{opcode} = \texttt{7'b0010011}\) es \textbf{tipo I} (ALU reg--imm). El \textit{decoder} no ejecuta; únicamente clasifica y provee los campos para la etapa de ejecución.
+
+\subsection{Camino de datos: \textit{regfile}, ALU y respuesta}
+
+Con los campos del \textit{decoder}, la interfaz direcciona el \textit{regfile} para leer operandos:
+\begin{itemize}
+  \item Tipo R: \(\texttt{alu\_a} \leftarrow \texttt{rdata\_a}(\texttt{rs1})\), \(\texttt{alu\_b} \leftarrow \texttt{rdata\_b}(\texttt{rs2})\).
+  \item Tipo I: \(\texttt{alu\_a} \leftarrow \texttt{rdata\_a}(\texttt{rs1})\), \(\texttt{alu\_b} \leftarrow \texttt{imm\_i}\) (ajustado al ancho de dato).
+\end{itemize}
+La ALU computa el resultado en función de \(\texttt{alu\_op}\). En \textbf{S\_WB}, si \(\texttt{rd}\neq 0\) y la instrucción es R/I, la interfaz habilita la escritura del \textit{regfile} con \(\texttt{alu\_result}\). En \textbf{S\_TX}, la interfaz inserta en FIFO TX un byte de respuesta (si el protocolo lo requiere) y retorna a \textbf{S\_IDLE}.
+
+\newpage
+
+\subsection{Observaciones de diseño}
+
+\begin{itemize}
+  \item La política LSB\(\rightarrow\)MSB en el ensamblado asegura compatibilidad con el flujo de bytes UART.
+  \item Es recomendable registrar \(\texttt{alu\_result}\) al final de \textbf{S\_EX} para garantizar estabilidad temporal en \textbf{S\_WB}/\textbf{S\_TX}.
+  \item Como mejora futura, puede añadirse un temporizador de \emph{timeout} durante \textbf{S\_I0}--\textbf{S\_I3} para descartar instrucciones incompletas, junto con un mecanismo básico de verificación de integridad.
+\end{itemize}

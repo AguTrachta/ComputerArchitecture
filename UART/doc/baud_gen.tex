@@ -1,0 +1,35 @@
+\section{Generador de baudios (\texttt{baud\_gen})}
+
+El primer bloque del sistema es el generador de baudios, cuya función es producir la señal de muestreo necesaria para sincronizar tanto la recepción como la transmisión de datos. 
+
+\subsection{Principio de funcionamiento}
+El módulo recibe como entradas el reloj principal de la FPGA (\texttt{clk}) y la señal de \texttt{reset}. 
+A partir de un divisor interno, genera una señal periódica llamada \texttt{sample\_tick}, que es utilizada por los módulos \texttt{uart\_rx} y \texttt{uart\_tx} para sincronizar sus máquinas de estados.
+
+El cálculo del divisor se realiza en función de la frecuencia de reloj de la FPGA y de la tasa de baudios deseada:
+\[
+DIVISOR = \frac{f_{clk}}{BAUD\_RATE \times 16}
+\]
+donde el factor 16 corresponde al \textit{oversampling}, una técnica habitual en UART que permite mejorar la detección de bits y reducir errores por jitter o pequeñas diferencias de frecuencia.
+
+\subsection{Oversampling en UART}
+
+En UART asíncrono el emisor y el receptor no comparten reloj, por lo que el receptor debe \emph{reconstruir} el instante de muestreo de cada bit a partir del flanco del \emph{start bit}. Para mejorar la robustez frente a pequeñas desintonías de baudios, jitter y ruido, se utiliza \textbf{oversampling}: muestrear cada bit varias veces a una frecuencia $M$ veces superior a la tasa de baudios.
+
+En este diseño se emplea $M=16$, por lo que el generador de baudios produce una señal de \emph{tick} con:
+\[
+f_{\text{tick}} = M \cdot BAUD\_RATE \qquad \Rightarrow \qquad T_{\text{tick}} = \frac{T_{\text{bit}}}{M}
+\]
+El receptor detecta el flanco descendente del start, espera \(\tfrac{M}{2}\) ticks (centro del start) y a partir de allí toma una muestra cada \(M\) ticks, que caen en el \textbf{centro} de cada bit de datos. Muestrear en el centro maximiza el margen a distorsiones temporales.
+
+\subsection{Flujo interno}
+\begin{itemize}
+    \item Un contador se incrementa en cada flanco ascendente del reloj principal.
+    \item Cuando el contador alcanza el valor del divisor, se reinicia y se genera un pulso en \texttt{sample\_tick}.
+    \item Este pulso marca los instantes exactos en que deben muestrearse o transmitirse los bits.
+\end{itemize}
+
+\subsection{Importancia en el sistema}
+El \texttt{baud\_gen} es esencial porque garantiza que tanto el transmisor como el receptor trabajen bajo la misma temporización. 
+En caso contrario, existiría desalineación entre los bits enviados y los recibidos, ocasionando errores en la reconstrucción de los datos.  
+Gracias a su parametrización, este módulo es flexible y puede adaptarse fácilmente a distintas frecuencias de reloj y diferentes tasas de transmisión.
