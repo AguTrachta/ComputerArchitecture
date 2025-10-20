@@ -1,0 +1,14 @@
+# Vivado folders
+UART.cache/
+UART.hw/
+UART.ip_user_files/
+UART.sim/
+UART.xpr
+
+# Only allow tex, pdf, png, and jpg files in doc folder, ignore all others
+doc/*
+#!doc/*.tex
+!doc/*.pdf
+#!doc/*.png
+#!doc/*.jpg
+#!doc/img/
