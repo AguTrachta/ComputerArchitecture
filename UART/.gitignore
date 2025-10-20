@@ -7,8 +7,8 @@ UART.xpr
 
 # Only allow tex, pdf, png, and jpg files in doc folder, ignore all others
 doc/*
-!doc/*.tex
+#!doc/*.tex
 !doc/*.pdf
-!doc/*.png
-!doc/*.jpg
-!doc/img/
+#!doc/*.png
+#!doc/*.jpg
+#!doc/img/
