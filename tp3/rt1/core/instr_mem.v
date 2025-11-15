@@ -13,8 +13,8 @@ module instr_mem #(
 
     initial begin
         // luego: $readmemh("coe/program.hex", rom);
-        // por ahora podés hardcodear un archivo mini tipo "program_m0.hex"
-        $readmemh("program_m0.hex", rom);
+        // por ahora hardcodeamos un archivo mini tipo "program_m0.hex"
+        $readmemh("D:/Facultad/arquitectura de computadoras/ComputerArchitecture/tp3/coe/program_m0.hex", rom);
     end
 
     // addr[31:2] = índice de palabra alineada a 4 bytes
