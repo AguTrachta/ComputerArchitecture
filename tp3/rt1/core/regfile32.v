@@ -4,6 +4,7 @@ module regfile32 #(
     parameter NREGS  = 32
 )(
     input  wire               clk,
+    input  wire               reset,
     // read ports
     input  wire [4:0]         raddr1,
     input  wire [4:0]         raddr2,
@@ -19,7 +20,10 @@ module regfile32 #(
 
     // x0 = 0 (write ignorado a x0)
     always @(posedge clk) begin
-        if (we && (waddr != 5'd0))
+        if (reset) begin
+            for (i = 0; i < NREGS; i = i + 1)
+            regs[i] <= 0;
+        end else if (we && (waddr != 5'd0))
             regs[waddr] <= wdata;
         // (opcional) inicialización: no necesaria funcionalmente
     end
