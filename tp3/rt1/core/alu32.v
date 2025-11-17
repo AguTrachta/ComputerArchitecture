@@ -30,6 +30,9 @@ module alu32
 
     reg signed [NB_DATA-1 : 0] r_result = 0;
     
+    // Para shift en RV32 se usan solo los 5 LSB (0..31)
+    wire [4:0] shamt = i_data_b[4:0];
+    
     always @(*) begin
     
         case (i_op)
@@ -38,8 +41,8 @@ module alu32
             AND     : r_result = i_data_a & i_data_b;
             OR      : r_result = i_data_a | i_data_b;
             XOR     : r_result = i_data_a ^ i_data_b;
-            SRA     : r_result = i_data_a >>> i_data_b;
-            SRL     : r_result = $unsigned(i_data_a) >> i_data_b[$clog2(NB_DATA)-1:0];
+            SRA     : r_result = i_data_a >>> shamt;
+            SRL     : r_result = $unsigned(i_data_a) >> shamt;
             NOR     : r_result = ~(i_data_a | i_data_b);
             
             default : r_result = {NB_DATA{1'b0}}; // All 0
