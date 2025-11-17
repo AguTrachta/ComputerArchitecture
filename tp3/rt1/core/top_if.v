@@ -36,7 +36,7 @@ module top_if (
     // ===========================
     // IF/ID REGISTER (pipeline latch)
     // ===========================
-    if_id_reg latch (
+    if_id_reg latch_if_id (
         .clk(clk),
         .reset(reset),
         .stall(stall),
