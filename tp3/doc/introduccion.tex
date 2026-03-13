@@ -1,0 +1,9 @@
+\section{Introducción}
+
+Un \textbf{pipeline} es una técnica de diseño utilizada en procesadores para mejorar el rendimiento mediante la división de la ejecución de instrucciones en varias etapas secuenciales. Cada etapa realiza una parte específica del procesamiento, permitiendo que múltiples instrucciones se procesen simultáneamente en diferentes fases. Esto incrementa la eficiencia y el aprovechamiento de los recursos del procesador, reduciendo en varios casos el tiempo total de ejecución.
+
+RISC-V es una arquitectura de conjunto de instrucciones (ISA) basada en el principio de computación con conjunto reducido de instrucciones (\textbf{Reduced Instruction Set Computer}). Se caracteriza por su simplicidad, modularidad y apertura, permitiendo la implementación de procesadores eficientes y escalables, siendo ampliamente utilizada para investigación, desarrollo y aplicaciones comerciales.
+
+En este informe se documenta el desarrollo de un pipeline de un procesador RISC-V implementado en una FPGA Basys 3, integrando las unidades de ALU y UART desarrolladas en los prácticos anteriores.  
+
+El objetivo principal es diseñar e implementar un pipeline de 5 etapas (IF, ID, EX, MEM, WB) que permita la ejecución eficiente de instrucciones RISC-V, manejando correctamente las dependencias de datos y control. Además, se busca validar el funcionamiento del pipeline mediante la ejecución de programas de prueba y la observación de su comportamiento a través de herramientas de depuración.
