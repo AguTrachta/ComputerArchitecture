@@ -886,3 +886,48 @@ Los siguientes pasos del proyecto serán:
 3. aterrizar los modelos de datos finales para registros, memoria y pipeline,
 4. implementar la base del backend en Python con uv y WebSockets,
 5. desarrollar el frontend visual sobre esa API.
+
+
+## Wireframe
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ RISC-V Debug UI   COM3   9600 baud   CONNECTED   CPU: IDLE   IMEM 1024     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────┬──────────────────────┬───────────────────────┐
+│ PROGRAMA                     │ CONTROL              │ OBSERVABILIDAD         │
+│                              │                      │                       │
+│ [Editor ASM]                 │ [Conectar]           │ Tabs:                 │
+│                              │ [Desconectar]        │ [Resumen] [Regs]      │
+│ [Abrir] [Guardar]            │ [Programar]          │ [Pipeline] [Mem]      │
+│ [Validar] [Traducir]         │ [Clear IMEM]         │ [Consola]             │
+│                              │ [Run] [Stop] [Step]  │                       │
+│ [HEX colapsable ▼]           │ [Dump Regs]          │ contenido tab activa  │
+│                              │ [Dump Pipeline]      │                       │
+│                              │ [Dump Mem]           │                       │
+└──────────────────────────────┴──────────────────────┴───────────────────────┘
+```
+
+En vez de mostrar todo de entrada, haría algo así:
+
+Global ▼
+IF ▼
+IF/ID ▼
+ID ▼
+ID/EX ▼
+EX ▼
+EX/MEM ▼
+MEM ▼
+MEM/WB ▼
+WB ▼
+
+Por defecto, dejaría abiertos solo:
+
+Global
+IF/ID
+ID/EX
+EX/MEM
+MEM/WB
+
+Porque esos son los más importantes para entender un pipeline.
