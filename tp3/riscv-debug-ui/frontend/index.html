@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RISC-V Debug UI</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Top Bar -->
+    <header class="top-bar glass">
+        <div class="brand">
+            <span class="logo-icon">▲</span>
+            <h1>RISC-V Debug UI</h1>
+        </div>
+        <div class="status-indicators">
+            <div class="indicator" id="ind-port">COM3</div>
+            <div class="indicator" id="ind-baud">9600 baud</div>
+            <div class="indicator badge-success" id="ind-conn">CONNECTED</div>
+            <div class="indicator badge-warning" id="ind-cpu">CPU: IDLE</div>
+            <div class="indicator" id="ind-imem">IMEM 1024</div>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <main class="main-layout">
+        
+        <!-- Column 1: PROGRAMA -->
+        <section class="panel glass col-programa">
+            <header class="panel-header">
+                <h2>PROGRAMA</h2>
+                <div class="actions">
+                    <button id="btn-open" class="btn-icon" title="Abrir">📂</button>
+                    <button id="btn-save" class="btn-icon" title="Guardar">💾</button>
+                </div>
+            </header>
+            <div class="panel-content">
+                <div class="editor-container">
+                    <textarea id="asm-editor" class="code-editor" spellcheck="false" placeholder="Escribe código ASM aquí..."></textarea>
+                </div>
+                <div class="editor-actions">
+                    <button id="btn-validate" class="btn primary">Validar</button>
+                    <button id="btn-translate" class="btn secondary">Traducir</button>
+                </div>
+                
+                <!-- Collapsible HEX -->
+                <details class="hex-viewer" id="hex-viewer">
+                    <summary>HEX Generado</summary>
+                    <div class="hex-content">
+                        <pre id="hex-output" class="code-block"></pre>
+                    </div>
+                </details>
+            </div>
+        </section>
+
+        <!-- Column 2: CONTROL -->
+        <section class="panel glass col-control">
+            <header class="panel-header">
+                <h2>CONTROL</h2>
+            </header>
+            <div class="panel-content">
+                <div class="control-group">
+                    <h3>Conexión</h3>
+                    <div class="btn-group">
+                        <button id="btn-connect" class="btn success">Conectar</button>
+                        <button id="btn-disconnect" class="btn danger" disabled>Desconectar</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>Programación</h3>
+                    <div class="btn-group">
+                        <button id="btn-program" class="btn warning">Programar FPGA</button>
+                        <button id="btn-clear-imem" class="btn secondary">Clear IMEM</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>Ejecución</h3>
+                    <div class="btn-group">
+                        <button id="btn-run" class="btn primary">Run ▶</button>
+                        <button id="btn-stop" class="btn danger">Stop ⏹</button>
+                        <button id="btn-step" class="btn secondary">Step ⏭</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>Dumps Manuales</h3>
+                    <div class="btn-group-vertical">
+                        <button id="btn-dump-regs" class="btn ghost">Dump Regs</button>
+                        <button id="btn-dump-pipe" class="btn ghost">Dump Pipeline</button>
+                        <button id="btn-dump-mem" class="btn ghost">Dump Mem</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Column 3: OBSERVABILIDAD -->
+        <section class="panel glass col-observabilidad">
+            <header class="panel-header tabs-header" id="obs-tabs">
+                <button class="tab-btn active" data-target="tab-resumen">Resumen</button>
+                <button class="tab-btn" data-target="tab-regs">Regs</button>
+                <button class="tab-btn" data-target="tab-pipeline">Pipeline</button>
+                <button class="tab-btn" data-target="tab-mem">Mem</button>
+                <button class="tab-btn" data-target="tab-console">Consola</button>
+            </header>
+            
+            <div class="panel-content tab-contents">
+                <!-- Tab: Resumen -->
+                <div id="tab-resumen" class="tab-pane active">
+                    <div class="summary-cards">
+                        <div class="card status-card">
+                            <h4>CPU State</h4>
+                            <span class="value success-text">IDLE</span>
+                        </div>
+                        <div class="card status-card">
+                            <h4>PC Actual</h4>
+                            <span class="value code-text">0x00000000</span>
+                        </div>
+                        <div class="card status-card">
+                            <h4>Última Instr</h4>
+                            <span class="value code-text">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab: Regs -->
+                <div id="tab-regs" class="tab-pane" style="display:none;">
+                    <div class="table-container">
+                        <table id="regs-table" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Reg</th>
+                                    <th>Alias</th>
+                                    <th>Hex</th>
+                                    <th>Dec</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populate via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab: Pipeline -->
+                <div id="tab-pipeline" class="tab-pane" style="display:none;">
+                    <div class="pipeline-viewer" id="pipeline-container">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Tab: Mem -->
+                <div id="tab-mem" class="tab-pane" style="display:none;">
+                    <div class="mem-controls">
+                        <input type="text" id="mem-offset" placeholder="Offset Ex: 0x000" class="input-text">
+                        <button id="btn-read-mem" class="btn secondary small">Leer</button>
+                    </div>
+                    <div class="table-container">
+                        <table id="mem-table" class="data-table code-table">
+                            <thead>
+                                <tr><th>Addr</th><th>+0</th><th>+4</th><th>+8</th><th>+C</th></tr>
+                            </thead>
+                            <tbody>
+                                <!-- Populate via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Tab: Consola -->
+                <div id="tab-console" class="tab-pane" style="display:none;">
+                    <div id="console-output" class="console-box">
+                        <div class="log-entry info">[INFO] UI Inicializada. Esperando conexión...</div>
+                    </div>
+                    <div class="console-input-row">
+                        <input type="text" id="console-input" placeholder="Comando..." class="input-text">
+                        <button id="btn-console-send" class="btn primary small">Enviar</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Scripts -->
+    <script src="state.js"></script>
+    <script src="api.js"></script>
+    <script src="ws.js"></script>
+    <script src="components/editor.js"></script>
+    <script src="components/controls.js"></script>
+    <script src="components/registers.js"></script>
+    <script src="components/memory.js"></script>
+    <script src="components/pipeline.js"></script>
+    <script src="components/console.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
