@@ -28,7 +28,7 @@ module top #(
     parameter BAUD_RATE = 9600, // --> UART baud rate
     parameter UART_BITS = 8,
     parameter FIFO_SIZE = 16,
-    parameter TX_FIFO_SIZE = 16, // Jugar con esta si se puede, aumentar el tamaño de la fifo hace que el pipeline se libere antes y llegue a idle a seguir esperando comandos mientras envía la respuesta
+    parameter TX_FIFO_SIZE = 256, // Jugar con esta si se puede, aumentar el tamaño de la fifo hace que el pipeline se libere antes y llegue a idle a seguir esperando comandos mientras envía la respuesta
     parameter SB_TICK = 16 // ticks para stop bit (16=1 stop, 24=1.5, 32=2)
 )(
     input wire i_clk,
