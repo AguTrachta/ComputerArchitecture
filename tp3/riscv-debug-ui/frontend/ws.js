@@ -2,17 +2,22 @@ window.WsClient = {
     connected: false,
     socket: null,
 
-    connect() {
-        if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
-            return;
+    buildWsCandidates() {
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+
+        if (window.location.protocol === 'file:') {
+            return [`${wsProtocol}//localhost:8080/ws`];
         }
 
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsHost = window.location.origin.includes('5500') || window.location.origin.includes('8000')
-            ? 'localhost:8080'
-            : window.location.host;
+        const candidates = [`${wsProtocol}//${window.location.host}/ws`];
+        if (window.location.port === '5500' || window.location.port === '8000') {
+            candidates.push(`${wsProtocol}//localhost:8080/ws`);
+        }
+        return candidates;
+    },
 
-        this.socket = new WebSocket(`${wsProtocol}//${wsHost}/ws`);
+    openSocket(url, retryOnClose = true) {
+        this.socket = new WebSocket(url);
 
         this.socket.onopen = () => {
             this.connected = true;
@@ -24,9 +29,13 @@ window.WsClient = {
             ConsoleComponent.logWarn('WebSocket desconectado del backend.');
             this.socket = null;
 
+            if (!retryOnClose) return;
+
             setTimeout(() => {
                 if (window.AppState.connection.connected) {
-                    this.connect();
+                    const candidates = this.buildWsCandidates();
+                    const retryUrl = candidates[1] || candidates[0];
+                    this.openSocket(retryUrl, false);
                 }
             }, 3000);
         };
@@ -43,6 +52,15 @@ window.WsClient = {
                 console.error('Failed to parse WS message', error);
             }
         };
+    },
+
+    connect() {
+        if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+
+        const [primaryUrl] = this.buildWsCandidates();
+        this.openSocket(primaryUrl, true);
     },
 
     disconnect() {

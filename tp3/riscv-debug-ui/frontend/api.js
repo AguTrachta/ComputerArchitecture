@@ -1,6 +1,16 @@
-const BASE_URL = window.location.origin.includes('5500') || window.location.origin.includes('8000')
-    ? 'http://localhost:8080'
-    : '';
+const buildApiCandidates = () => {
+    if (window.location.protocol === 'file:') {
+        return ['http://localhost:8080'];
+    }
+
+    const candidates = [''];
+    if (window.location.port === '5500') {
+        candidates.push('http://localhost:8080');
+    } else if (window.location.port === '8000') {
+        candidates.push('http://localhost:8080');
+    }
+    return candidates;
+};
 
 const extractErrorMessage = async (response) => {
     try {
@@ -25,16 +35,31 @@ const req = async (endpoint, method = 'GET', body = null) => {
     }
 
     const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const response = await fetch(`${BASE_URL}${path}`, options);
+    const candidates = buildApiCandidates();
+    let lastError = null;
 
-    if (!response.ok) {
-        const message = await extractErrorMessage(response);
-        ConsoleComponent.logError(`API Error en ${endpoint}: ${message}`);
-        throw new Error(message);
+    for (const baseUrl of candidates) {
+        try {
+            const response = await fetch(`${baseUrl}${path}`, options);
+
+            if (!response.ok) {
+                const message = await extractErrorMessage(response);
+                ConsoleComponent.logError(`API Error en ${endpoint}: ${message}`);
+                throw new Error(message);
+            }
+
+            if (response.status === 204) return null;
+            return await response.json();
+        } catch (error) {
+            lastError = error;
+            const isNetworkError = error instanceof TypeError;
+            if (!isNetworkError || baseUrl === candidates[candidates.length - 1]) {
+                throw error;
+            }
+        }
     }
 
-    if (response.status === 204) return null;
-    return await response.json();
+    throw lastError || new Error(`No se pudo alcanzar ${endpoint}.`);
 };
 
 const syncStatus = async () => {
