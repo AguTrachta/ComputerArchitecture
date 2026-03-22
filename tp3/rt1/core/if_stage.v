@@ -5,7 +5,7 @@ module if_stage #(
     input  wire        clk,
     input  wire        reset,
     input  wire        pc_write_en,
-    input  wire        flush,
+    // input  wire        flush,        // WARNING LINTER: not used
     input  wire [31:0] pc_next_external,   // viene de EX (branch/jump)
     input  wire        pc_sel_external,    // 1 = usar pc_next_external
 

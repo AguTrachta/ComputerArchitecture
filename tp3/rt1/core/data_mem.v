@@ -8,7 +8,9 @@
  */
 
 module data_mem #(
-    parameter integer DEPTH_BYTES = 4096  // 4KB
+    parameter DEPTH_BYTES = 4096,  // 4KB
+    parameter DEPTH_WORDS = (DEPTH_BYTES / 4),  // 1024
+    parameter WORD_AW     = $clog2(DEPTH_WORDS) //10
 )(
     input  wire        clk,
     input  wire        reset,
@@ -18,11 +20,15 @@ module data_mem #(
     input  wire [3:0]  byte_en,
     output wire [31:0] rdata,
     output wire        busy_clear
+    
+    // Se usa un mux para seleccionar si el control es desde el pipeline o de la debug unit
+    //input  wire [WORD_AW-1:0]   i_dbg_mem_idx, // Dirección de memoria a leer
+    //output wire [31:0]          o_dbg_mem_data // Datos de la memoria a leer
 );
 
     // Cantidad de palabras de 32 bits (DEPTH_BYTES debe ser múltiplo de 4)
-    localparam integer DEPTH_WORDS = (DEPTH_BYTES / 4); // 1024
-    localparam integer WORD_AW     = $clog2(DEPTH_WORDS); //10
+    //localparam integer DEPTH_WORDS = (DEPTH_BYTES / 4); // 1024
+    //localparam integer WORD_AW     = $clog2(DEPTH_WORDS); //10
     
     // Tamaño de la memoria es 4KB
     // Como puedo almacenar hasta Half-Word (2 Bytes) --> 8 bits * 4 = 32 bits
@@ -84,14 +90,18 @@ module data_mem #(
 
     // Dirección por palabra --> 10 bits
     wire [WORD_AW-1:0] word_addr = addr[WORD_AW+1:2];
+    wire [1:0]         byte_offset  = addr[1:0];
+    wire               aligned_word = (byte_offset == 2'b00);
     
     // Offset de Byte dentro de una palabra --> 2 bits
     //wire [1:0] byte_offset  = addr[1:0];
 
     // Rango válido
     wire in_range = (addr[31:WORD_AW+2] == {(32-(WORD_AW+2)){1'b0}}); // Verifico que no se pase de 12 bits
-    wire access_ok = in_range; // Si está en rango puedo operar, si no lo está, no lo dejo (Ta bien?)
-
+    wire allow_unaligned = 1'b1; // para evitar linter warning de 2 bits no usados en addr, los consumo con algo que da 1 siempre.
+    wire access_ok = in_range && (allow_unaligned || aligned_word); // Si está en rango puedo operar, si no lo está, no lo dejo (Ta bien?)
+    // wire access_ok = in_range;
+    
     // Salida del IP
     wire [31:0] douta;
     reg  access_ok_r;

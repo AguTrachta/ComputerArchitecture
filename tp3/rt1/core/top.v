@@ -23,19 +23,45 @@ module top #(
     parameter NB_OP = 6,
     parameter DMEM_BYTES = 4096,
     parameter ADDR_W = 10,  // 2^10 words = 1024 instrucciones --> instr_mem
-    parameter CLK_FREQ  = 100_000_000, // System Clock --> Revisar si UART falla
+    //parameter CLK_FREQ  = 100_000_000, // System Clock --> Revisar si UART falla
+    parameter CLK_FREQ  = 90_000_000, // System Clock --> Revisar si UART falla
     parameter BAUD_RATE = 9600, // --> UART baud rate
     parameter UART_BITS = 8,
     parameter FIFO_SIZE = 16,
-    parameter TX_FIFO_SIZE = 16, // Jugar con esta si se puede, aumentar el tamaño de la fifo hace que el pipeline se libere antes y llegue a idle a seguir esperando comandos mientras envía la respuesta
+    parameter TX_FIFO_SIZE = 256, // Jugar con esta si se puede, aumentar el tamaño de la fifo hace que el pipeline se libere antes y llegue a idle a seguir esperando comandos mientras envía la respuesta
     parameter SB_TICK = 16 // ticks para stop bit (16=1 stop, 24=1.5, 32=2)
 )(
-    input wire clk,
-    input wire reset,
+    input wire i_clk,
+    input wire i_reset,
     
     input wire rx,
-    output wire tx
+    output wire tx,
+    
+    // LEDS DE ESTADO
+    output wire led_state_idle,
+    output wire led_state_running,
+    output wire led_state_programming,
+    output wire led_state_dumping
 );
+
+    // CLOCK GENERATOR
+    wire clk;
+    wire locked;
+    wire reset;
+
+    assign reset = i_reset | ~locked;
+    
+    clk_wiz_0 instance_name
+    (
+        // Clock out ports
+        .CLK_90MHZ(clk),     // output CLK_90MHZ
+        // Status and control signals
+        .reset(i_reset), // input reset
+        .locked(locked),       // output locked
+       // Clock in ports
+        .clk_in1(i_clk)      // input clk_in1
+    );
+
 
     // ============================================================
     // Wire Declarations
@@ -109,7 +135,7 @@ module top #(
     wire idex_mem_write;
     wire idex_mem_to_reg;
     wire idex_alu_src;
-    wire idex_branch;
+    // wire idex_branch; // WARNING LINTER: not used
     wire idex_jump;
     wire idex_valid;
     
@@ -389,13 +415,22 @@ module top #(
     wire [4:0]  dbg_reg_idx;
     wire [31:0] dbg_reg_data;
     
+    // Para DUMP DATA MEMORY
+    wire [31:0] dmem_read_data_pipe; // de donde voy a tomar los datos
+    wire        dbg_mem_dump_en; // Flag para avisar que estoy dumpeando memoria
+    wire [9:0]  dbg_mem_idx;  // addr para memoria
+    //wire [31:0] dbg_mem_data; // datos de lectura
+    
+    
     
     /* debug_unit ...
      *
      */
     
     debug_unit #(
-        .IMEM_ADDR_W(ADDR_W)
+        // Falta PROG_COUNT_W
+        .IMEM_ADDR_W(ADDR_W),
+        .DMEM_BYTES(DMEM_BYTES)
     ) dbg_u (
         .clk(clk),
         .reset(reset),
@@ -423,7 +458,18 @@ module top #(
         
         // ID
         .o_dbg_reg_idx(dbg_reg_idx),
-        .i_dbg_reg_data(dbg_reg_data)
+        .i_dbg_reg_data(dbg_reg_data),
+        
+        // Data Memory
+        .o_dbg_mem_dump_en(dbg_mem_dump_en),
+        .i_dbg_mem_data(dmem_read_data),
+        .o_dbg_mem_idx(dbg_mem_idx),
+        
+        // LEDS
+        .o_state_idle(led_state_idle),
+        .o_state_running(led_state_running),
+        .o_state_programming(led_state_programming),
+        .o_state_dumping(led_state_dumping)
     );
     
     // ------------------- UART -------------------
@@ -524,7 +570,7 @@ module top #(
         .reset(cpu_reset),
         //.pc_write_en(~stall_if),
         .pc_write_en((~stall_if) & dbg_pipeline_en),
-        .flush(1'b0),  // no usamos flush interno de IF por ahora
+        // .flush(1'b0),  // no usamos flush interno de IF por ahora    // WARNING LINTER: not used
         .pc_next_external(redirect_target_id),
         .pc_sel_external(redirect_taken_id),
         
@@ -624,13 +670,13 @@ module top #(
     ) id_s (
         .clk(clk),
         .reset(cpu_reset),
-        .stall_id(stall_id),
-        .flush_idex(flush_idex),
+        //.stall_id(stall_id),      // WARNING LINTER: not used
+        //.flush_idex(flush_idex),  // WARNING LINTER: not used
 
-        .id_pc(ifid_pc),
+        //.id_pc(ifid_pc),          // WARNING LINTER: not used
         .id_pc_plus4(ifid_pc_plus4),
         .id_instr(ifid_instr),
-        .id_valid(ifid_valid),
+        //.id_valid(ifid_valid),    // WARNING LINTER: not used
 
         .wb_we(wb_we),
         .wb_rd(wb_rd_idx),
@@ -710,7 +756,8 @@ module top #(
         .idex_MemWrite(idex_mem_write),
         .idex_MemToReg(idex_mem_to_reg),
         .idex_ALUSrc  (idex_alu_src),
-        .idex_Branch  (idex_branch),
+        // .idex_Branch  (idex_branch), // WARNING LINTER: not used
+        .idex_Branch  (),               // WARNING LINTER: not used
         .idex_Jump    (idex_jump),
         .idex_valid   (idex_valid)
     );
@@ -1075,36 +1122,49 @@ module top #(
      * El resultado final se asigna a mem_load_data_r, que luego se conecta a mem_load_data para ser usado en la etapa de WB.
      * Esto permite soportar correctamente las instrucciones de carga con diferentes tamaños y alineaciones.
     */
+    
+    reg [31:0] dmem_read_data_hold; // Mantiene útimo valor de memoria de datos para no romper nada cuando haga dump
+    
+    assign dmem_read_data_pipe = dbg_mem_dump_en ? dmem_read_data_hold : dmem_read_data; // si estoy dump, retengo ultimo valor, sino funciono normal
+    
+    always @(posedge clk) begin
+        if (reset) begin
+            dmem_read_data_hold <= 32'b0;
+        end else if (!dbg_mem_dump_en) begin
+            dmem_read_data_hold <= dmem_read_data;
+        end
+    end
+    
     always @(*) begin
-        mem_load_data_r = dmem_read_data;  // default = LW
+        mem_load_data_r = dmem_read_data_pipe; //dmem_read_data;  // default = LW
 
         case (exmem_funct3)
 
             // LB: se selecciona el byte indicado por mem_addr[1:0] y se hace sign-extension
             F3_LB: begin
                 case (mem_addr[1:0])
-                    2'b00: mem_load_data_r = {{24{dmem_read_data[7]}},   dmem_read_data[7:0]};
-                    2'b01: mem_load_data_r = {{24{dmem_read_data[15]}},  dmem_read_data[15:8]};
-                    2'b10: mem_load_data_r = {{24{dmem_read_data[23]}},  dmem_read_data[23:16]};
-                    2'b11: mem_load_data_r = {{24{dmem_read_data[31]}},  dmem_read_data[31:24]};
+                    2'b00: mem_load_data_r = {{24{dmem_read_data_pipe[7]}},   dmem_read_data_pipe[7:0]};
+                    2'b01: mem_load_data_r = {{24{dmem_read_data_pipe[15]}},  dmem_read_data_pipe[15:8]};
+                    2'b10: mem_load_data_r = {{24{dmem_read_data_pipe[23]}},  dmem_read_data_pipe[23:16]};
+                    2'b11: mem_load_data_r = {{24{dmem_read_data_pipe[31]}},  dmem_read_data_pipe[31:24]};
                 endcase
             end
 
             // LBU: se selecciona el byte indicado por mem_addr[1:0] y se hace zero-extension
             F3_LBU: begin
                 case (mem_addr[1:0])
-                    2'b00: mem_load_data_r = {24'b0, dmem_read_data[7:0]};
-                    2'b01: mem_load_data_r = {24'b0, dmem_read_data[15:8]};
-                    2'b10: mem_load_data_r = {24'b0, dmem_read_data[23:16]};
-                    2'b11: mem_load_data_r = {24'b0, dmem_read_data[31:24]};
+                    2'b00: mem_load_data_r = {24'b0, dmem_read_data_pipe[7:0]};
+                    2'b01: mem_load_data_r = {24'b0, dmem_read_data_pipe[15:8]};
+                    2'b10: mem_load_data_r = {24'b0, dmem_read_data_pipe[23:16]};
+                    2'b11: mem_load_data_r = {24'b0, dmem_read_data_pipe[31:24]};
                 endcase
             end
 
             // LH: se selecciona el halfword indicado por mem_addr[1:0] (00 o 10) y se hace sign-extension
             F3_LH: begin
                 case (mem_addr[1:0])
-                    2'b00: mem_load_data_r = {{16{dmem_read_data[15]}}, dmem_read_data[15:0]};
-                    2'b10: mem_load_data_r = {{16{dmem_read_data[31]}}, dmem_read_data[31:16]};
+                    2'b00: mem_load_data_r = {{16{dmem_read_data_pipe[15]}}, dmem_read_data_pipe[15:0]};
+                    2'b10: mem_load_data_r = {{16{dmem_read_data_pipe[31]}}, dmem_read_data_pipe[31:16]};
                     default: mem_load_data_r = 32'b0; // halfword desalineado
                 endcase
             end
@@ -1112,19 +1172,31 @@ module top #(
             // LHU: se selecciona el halfword indicado por mem_addr[1:0] (00 o 10) y se hace zero-extension
             F3_LHU: begin
                 case (mem_addr[1:0])
-                    2'b00: mem_load_data_r = {16'b0, dmem_read_data[15:0]};
-                    2'b10: mem_load_data_r = {16'b0, dmem_read_data[31:16]};
+                    2'b00: mem_load_data_r = {16'b0, dmem_read_data_pipe[15:0]};
+                    2'b10: mem_load_data_r = {16'b0, dmem_read_data_pipe[31:16]};
                     default: mem_load_data_r = 32'b0;
                 endcase
             end
 
             default: begin
-                mem_load_data_r = dmem_read_data; // LW
+                mem_load_data_r = dmem_read_data_pipe; // LW
             end
         endcase
     end
 
     assign mem_load_data = mem_load_data_r;
+
+
+    wire [31:0] a_addr;
+    wire        a_we;
+    wire  [3:0] a_byte_en;
+    //wire [31:0] a_rdata;
+    
+    assign a_addr       = dbg_mem_dump_en ? {20'b0, dbg_mem_idx, 2'b00} : mem_addr;
+    assign a_we         = dbg_mem_dump_en ? 1'b0                        : mem_write_enable;
+    assign a_byte_en    = dbg_mem_dump_en ? 4'b0000                     : mem_byte_enable;
+    //assign dbg_mem_data = dmem_read_data;
+
 
     /* data_mem ...
      *
@@ -1134,10 +1206,10 @@ module top #(
     ) u_dmem (
         .clk     (clk),
         .reset   (reset),
-        .addr    (mem_addr),
+        .addr    (a_addr),
         .wdata   (mem_write_data),
-        .we      (mem_write_enable),
-        .byte_en (mem_byte_enable),
+        .we      (a_we),
+        .byte_en (a_byte_en),
         .rdata   (dmem_read_data)
     );
 

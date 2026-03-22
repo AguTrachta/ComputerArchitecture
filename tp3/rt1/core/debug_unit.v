@@ -22,7 +22,11 @@
 
 module debug_unit #(
     parameter IMEM_ADDR_W   = 10,
-    parameter PROG_COUNT_W  = 16
+    parameter PROG_COUNT_W  = 16,
+    parameter DMEM_BYTES    = 4096, // tamaño memoria de datos (4KB)
+    parameter DEPTH_WORDS   = (DMEM_BYTES / 4),    // 1024
+    parameter WORD_AW       = $clog2(DEPTH_WORDS)  //10
+    
 )(
     input  wire clk,
     input  wire reset,
@@ -50,52 +54,74 @@ module debug_unit #(
     
     // REGs of ID 
     output wire [4:0]  o_dbg_reg_idx,
-    input  wire [31:0] i_dbg_reg_data
+    input  wire [31:0] i_dbg_reg_data,
+    
+    // DMEM utils (DUMP)
+    output wire [WORD_AW-1:0]   o_dbg_mem_idx,
+    input  wire [31:0]          i_dbg_mem_data,
+    output wire                 o_dbg_mem_dump_en, // Flag para indicar que estoy dumpeando, se pone en 1 para recorrer la data memory
+    
+    // FLAGS PARA LEDS
+    output wire o_state_idle,
+    output wire o_state_running,
+    output wire o_state_programming,
+    output wire o_state_dumping
     );
+    
     
     
     // ============================================================
     // Estados
     // ============================================================
     
-    localparam [4:0]
+    localparam [5:0]
     // Debug unit
-        ST_IDLE            = 5'd0, // Esperando algun comando
-        ST_DECODE_CMD      = 5'd1, // Decodificando el comando
-        ST_ERROR           = 5'd2, // Error ???
+        ST_IDLE            = 6'd0, // Esperando algun comando
+        ST_DECODE_CMD      = 6'd1, // Decodificando el comando
+        ST_ERROR           = 6'd2, // Error ???
     // Memoria de programa
-        ST_PROG_CLEAR      = 5'd3, // Limpiar memoria con NOP
-        ST_PROG_BEGIN      = 5'd4, // Grabar memoria
-        ST_PROG_LEN_HI     = 5'd5,
-        ST_PROG_LEN_LO     = 5'd6,
-        ST_PROG_B0         = 5'd7,
-        ST_PROG_B1         = 5'd8,
-        ST_PROG_B2         = 5'd9,
-        ST_PROG_B3         = 5'd10,
-        ST_PROG_WRITE_WORD = 5'd11,
-        ST_PROG_END        = 5'd12,
+        ST_PROG_CLEAR      = 6'd3, // Limpiar memoria con NOP
+        ST_PROG_BEGIN      = 6'd4, // Grabar memoria
+        ST_PROG_LEN_HI     = 6'd5,
+        ST_PROG_LEN_LO     = 6'd6,
+        ST_PROG_B0         = 6'd7,
+        ST_PROG_B1         = 6'd8,
+        ST_PROG_B2         = 6'd9,
+        ST_PROG_B3         = 6'd10,
+        ST_PROG_WRITE_WORD = 6'd11,
+        ST_PROG_END        = 6'd12,
     // Ejecucion
-        ST_RUN_CONTINUOUS  = 5'd13, // Ejecuta programa normalmente
-        ST_STEP_ARM        = 5'd14,  // REVISAR SI ESTE SIRVE PARA FRENAR AL SIGUIENTE CLK Y DUMPEAR (si se complementa con exec)
-        ST_STEP_EXEC       = 5'd15, // Ejecuta un step del programa
-        ST_RESET_EXEC      = 5'd16,
-        ST_DRAIN           = 5'd17, // Detectó HALT, espero a vaciar pipeline
+        ST_RUN_CONTINUOUS  = 6'd13, // Ejecuta programa normalmente
+        ST_STEP_ARM        = 6'd14,  // REVISAR SI ESTE SIRVE PARA FRENAR AL SIGUIENTE CLK Y DUMPEAR (si se complementa con exec)
+        ST_STEP_EXEC       = 6'd15, // Ejecuta un step del programa
+        ST_RESET_EXEC      = 6'd16,
+        ST_DRAIN           = 6'd17, // Detectó HALT, espero a vaciar pipeline
     // Dumps
-        ST_DUMP_LATCHES    = 5'd18, // Dump de latches
-        ST_DUMP_MEM        = 5'd19, // Dump de memoria de datos
-        ST_DUMP_DONE       = 5'd20,
+        ST_DUMP_DONE       = 6'd18,
     // Subestados --> DUMP REGS
-            ST_DUMP_REGS_HDR      = 5'd21,
-            ST_DUMP_REGS_SET_IDX  = 5'd22,
-            ST_DUMP_REGS_LATCH    = 5'd23,
-            ST_DUMP_REGS_SEND_B3  = 5'd24,
-            ST_DUMP_REGS_SEND_B2  = 5'd25,
-            ST_DUMP_REGS_SEND_B1  = 5'd26,
-            ST_DUMP_REGS_SEND_B0  = 5'd27,
-            ST_DUMP_REGS_NEXT     = 5'd28;
+            ST_DUMP_REGS_HDR      = 6'd19,
+            ST_DUMP_REGS_SET_IDX  = 6'd20,
+            ST_DUMP_REGS_LATCH    = 6'd21,
+            ST_DUMP_REGS_SEND_B3  = 6'd22,
+            ST_DUMP_REGS_SEND_B2  = 6'd23,
+            ST_DUMP_REGS_SEND_B1  = 6'd24,
+            ST_DUMP_REGS_SEND_B0  = 6'd25,
+            ST_DUMP_REGS_NEXT     = 6'd26,
+    // Subestados --> DUMP MEM
+            ST_DUMP_MEM_HDR       = 6'd27,
+            ST_DUMP_MEM_SET_ADDR  = 6'd28,
+            ST_DUMP_MEM_WAIT      = 6'd29, // Pequeño delay para que llegue a leer la memoria
+            ST_DUMP_MEM_LATCH     = 6'd30,
+            ST_DUMP_MEM_SEND_B3   = 6'd31,
+            ST_DUMP_MEM_SEND_B2   = 6'd32,
+            ST_DUMP_MEM_SEND_B1   = 6'd33,
+            ST_DUMP_MEM_SEND_B0   = 6'd34,
+            ST_DUMP_MEM_NEXT      = 6'd35;
+    // Subestados --> DUMP LATCHES
+            
     
     // Estados FSM
-    reg [4:0] state, next_state;
+    reg [5:0] state, next_state;
     reg [1:0] reset_exec_cnt, next_reset_exec_cnt;
     reg [1:0] drain_cnt, next_drain_cnt;
     
@@ -183,6 +209,11 @@ module debug_unit #(
     reg [7:0]  tx_data_r,     next_tx_data_r;
     reg        tx_wr_en_r,    next_tx_wr_en_r;
     
+    // Data memory
+    reg        dbg_mem_dump_en_r, next_dbg_mem_dump_en_r;
+    reg [9:0]  dbg_mem_idx_r,     next_dbg_mem_idx_r;
+    reg [31:0] dbg_mem_data_latched, next_dbg_mem_data_latched;
+    
     
     
     // Registro de estado y registros internos
@@ -222,6 +253,11 @@ module debug_unit #(
             // Para ID
             dbg_reg_idx_r         <= 5'd0;
             dbg_reg_data_latched  <= 32'd0;
+            
+            // Para dump memory
+            dbg_mem_dump_en_r    <= 1'b0;
+            dbg_mem_idx_r        <= 10'd0;
+            dbg_mem_data_latched <= 32'd0;
         end else begin
             state              <= next_state;
             cmd_reg            <= next_cmd_reg;
@@ -253,6 +289,11 @@ module debug_unit #(
             // Para ID
             dbg_reg_idx_r         <= next_dbg_reg_idx_r;
             dbg_reg_data_latched  <= next_dbg_reg_data_latched;
+            
+            // Para dump memory:
+            dbg_mem_dump_en_r    <= next_dbg_mem_dump_en_r;
+            dbg_mem_idx_r        <= next_dbg_mem_idx_r;
+            dbg_mem_data_latched <= next_dbg_mem_data_latched;
                         
             // Captura diferida desde FIFO RX
             rx_pop_pending <= next_rx_pop_pending;
@@ -310,6 +351,11 @@ module debug_unit #(
         next_dbg_reg_idx_r        = dbg_reg_idx_r;
         next_dbg_reg_data_latched = dbg_reg_data_latched;
         
+        // Data mem dump:
+        next_dbg_mem_dump_en_r    = 1'b0;
+        next_dbg_mem_idx_r        = dbg_mem_idx_r;
+        next_dbg_mem_data_latched = dbg_mem_data_latched;
+        
         
         // si estaba pendiente una lectura, al próximo ciclo
         // ya no debe seguir pendiente
@@ -345,8 +391,8 @@ module debug_unit #(
                     CMD_RUN:          next_state = ST_RUN_CONTINUOUS;
                     CMD_STEP:         next_state = ST_STEP_ARM;
                     CMD_DUMP_REGS:    next_state = ST_DUMP_REGS_HDR; //ST_DUMP_REGS;
-                    CMD_DUMP_LATCHES: next_state = ST_DUMP_LATCHES;
-                    CMD_DUMP_MEM:     next_state = ST_DUMP_MEM;
+                    //CMD_DUMP_LATCHES: next_state = ST_DUMP_LATCHES;
+                    CMD_DUMP_MEM:     next_state = ST_DUMP_MEM_HDR;
                     CMD_STOP:         next_state = ST_IDLE; // Revisar si conviene aplicar esto solo cuando esté en ST_RUN_CONTINUOUS.
 //                    CMD_STOP: begin
 //                        if (!i_tx_full) begin
@@ -605,48 +651,7 @@ module debug_unit #(
             end
             
             
-                        
-            // ----------------------------------------------------
-            // Dumps
-            // ----------------------------------------------------
-            
-            
-            
-            ST_DUMP_LATCHES: begin // Latches
-                next_pipeline_en_r = 1'b0;
-                if (!i_tx_full) begin
-                    next_tx_data_r  = RESP_DUMP_LATCH;
-                    next_tx_wr_en_r = 1'b1;
-                    next_state      = ST_DUMP_DONE;
-                end
-            end
-            
-            
-            
-            ST_DUMP_MEM: begin // Memoria de datos
-                next_pipeline_en_r = 1'b0;
-                if (!i_tx_full) begin
-                    next_tx_data_r  = RESP_DUMP_MEM;
-                    next_tx_wr_en_r = 1'b1;
-                    next_state      = ST_DUMP_DONE;
-                end
-            end
-            
-            
-            
-            ST_DUMP_DONE: begin
-                next_pipeline_en_r = 1'b0;
-                next_reset_exec_r  = 1'b0;
-                
-                if (!i_tx_full) begin
-                    next_tx_data_r  = RESP_DUMP_DONE;
-                    next_tx_wr_en_r = 1'b1;
-                    next_state         = ST_IDLE;
-                end
-            end
-            
-            
-            
+                       
             // ----------------------------------------------------
             // Error
             // ----------------------------------------------------
@@ -659,12 +664,155 @@ module debug_unit #(
                     next_state      = ST_IDLE;
                 end
             end
+                        
+                        
+                        
+            // ----------------------------------------------------
+            // Dumps
+            // ----------------------------------------------------
+            
+           
+                        
+            ST_DUMP_DONE: begin
+                next_pipeline_en_r = 1'b0;
+                next_reset_exec_r  = 1'b0;
+                
+                if (!i_tx_full) begin
+                    next_tx_data_r  = RESP_DUMP_DONE;
+                    next_tx_wr_en_r = 1'b1;
+                    next_state         = ST_IDLE;
+                end
+            end
+            
+
+            
+            // ----------------------------------------------------
+            // DUMP DATA MEMORY
+            // ----------------------------------------------------
             
             
             
-            // ---------
+            ST_DUMP_MEM_HDR: begin // Memoria de datos
+                next_pipeline_en_r        = 1'b0;
+                next_reset_exec_r         = 1'b0;
+                next_dbg_mem_dump_en_r    = 1'b1;
+            
+                if (!i_tx_full) begin
+                    next_tx_data_r            = RESP_DUMP_MEM;
+                    next_tx_wr_en_r           = 1'b1;
+                    next_dbg_mem_idx_r        = 10'd0;
+                    next_dbg_mem_data_latched = 32'd0;
+                    next_state                = ST_DUMP_MEM_SET_ADDR;
+                end
+            end
+            
+            
+            
+            ST_DUMP_MEM_SET_ADDR: begin
+                next_pipeline_en_r     = 1'b0;
+                next_reset_exec_r      = 1'b0;
+                next_dbg_mem_dump_en_r = 1'b1;
+            
+                next_state             = ST_DUMP_MEM_WAIT;
+            end
+            
+            
+            
+            ST_DUMP_MEM_WAIT: begin
+                next_pipeline_en_r     = 1'b0;
+                next_reset_exec_r      = 1'b0;
+                next_dbg_mem_dump_en_r = 1'b1;
+            
+                next_state             = ST_DUMP_MEM_LATCH;
+            end
+            
+            
+            
+            ST_DUMP_MEM_LATCH: begin
+                next_pipeline_en_r         = 1'b0;
+                next_reset_exec_r          = 1'b0;
+                next_dbg_mem_dump_en_r     = 1'b1;
+            
+                next_dbg_mem_data_latched  = i_dbg_mem_data;
+                next_state                 = ST_DUMP_MEM_SEND_B3;
+            end
+            
+            
+            
+            ST_DUMP_MEM_SEND_B3: begin
+                next_pipeline_en_r     = 1'b0;
+                next_reset_exec_r      = 1'b0;
+                next_dbg_mem_dump_en_r = 1'b1;
+            
+                if (!i_tx_full) begin
+                    next_tx_data_r  = dbg_mem_data_latched[31:24];
+                    next_tx_wr_en_r = 1'b1;
+                    next_state      = ST_DUMP_MEM_SEND_B2;
+                end
+            end
+            
+            
+            
+            ST_DUMP_MEM_SEND_B2: begin
+                next_pipeline_en_r     = 1'b0;
+                next_reset_exec_r      = 1'b0;
+                next_dbg_mem_dump_en_r = 1'b1;
+            
+                if (!i_tx_full) begin
+                    next_tx_data_r  = dbg_mem_data_latched[23:16];
+                    next_tx_wr_en_r = 1'b1;
+                    next_state      = ST_DUMP_MEM_SEND_B1;
+                end
+            end
+            
+            
+            
+            ST_DUMP_MEM_SEND_B1: begin
+                next_pipeline_en_r     = 1'b0;
+                next_reset_exec_r      = 1'b0;
+                next_dbg_mem_dump_en_r = 1'b1;
+            
+                if (!i_tx_full) begin
+                    next_tx_data_r  = dbg_mem_data_latched[15:8];
+                    next_tx_wr_en_r = 1'b1;
+                    next_state      = ST_DUMP_MEM_SEND_B0;
+                end
+            end
+            
+            
+            
+            ST_DUMP_MEM_SEND_B0: begin
+                next_pipeline_en_r     = 1'b0;
+                next_reset_exec_r      = 1'b0;
+                next_dbg_mem_dump_en_r = 1'b1;
+            
+                if (!i_tx_full) begin
+                    next_tx_data_r  = dbg_mem_data_latched[7:0];
+                    next_tx_wr_en_r = 1'b1;
+                    next_state      = ST_DUMP_MEM_NEXT;
+                end
+            end
+            
+            
+            
+            ST_DUMP_MEM_NEXT: begin
+                next_pipeline_en_r     = 1'b0;
+                next_reset_exec_r      = 1'b0;
+                next_dbg_mem_dump_en_r = 1'b1;
+            
+                if (dbg_mem_idx_r == DEPTH_WORDS-1) begin
+                    next_state = ST_DUMP_DONE;
+                end else begin
+                    next_dbg_mem_idx_r = dbg_mem_idx_r + 1'b1;
+                    next_state         = ST_DUMP_MEM_SET_ADDR;
+                end
+            end
+            
+            
+            
+            // ----------------------------------------------------
             // DUMP REGS
-            // ---------
+            // ----------------------------------------------------
             
             
             
@@ -792,5 +940,44 @@ module debug_unit #(
     // ID
     assign o_dbg_reg_idx = dbg_reg_idx_r;
     
+    // Data Memory
+    assign o_dbg_mem_dump_en = dbg_mem_dump_en_r;
+    assign o_dbg_mem_idx     = dbg_mem_idx_r;
+    
+    // FLAGS PARA LEDS
+    assign o_state_idle    = (state == ST_IDLE);
+    assign o_state_running = (state == ST_RUN_CONTINUOUS);
+    
+    assign o_state_programming =
+       (state == ST_PROG_CLEAR)      ||
+       (state == ST_PROG_BEGIN)      ||
+       (state == ST_PROG_LEN_HI)     ||
+       (state == ST_PROG_LEN_LO)     ||
+       (state == ST_PROG_B0)         ||
+       (state == ST_PROG_B1)         ||
+       (state == ST_PROG_B2)         ||
+       (state == ST_PROG_B3)         ||
+       (state == ST_PROG_WRITE_WORD) ||
+       (state == ST_PROG_END);
+       
+    assign o_state_dumping =
+       (state == ST_DUMP_REGS_HDR)     ||
+       (state == ST_DUMP_REGS_SET_IDX) ||
+       (state == ST_DUMP_REGS_LATCH)   ||
+       (state == ST_DUMP_REGS_SEND_B3) ||
+       (state == ST_DUMP_REGS_SEND_B2) ||
+       (state == ST_DUMP_REGS_SEND_B1) ||
+       (state == ST_DUMP_REGS_SEND_B0) ||
+       (state == ST_DUMP_REGS_NEXT)    ||
+       (state == ST_DUMP_MEM_HDR)      ||
+       (state == ST_DUMP_MEM_SET_ADDR) ||
+       (state == ST_DUMP_MEM_WAIT)     ||
+       (state == ST_DUMP_MEM_LATCH)    ||
+       (state == ST_DUMP_MEM_SEND_B3)  ||
+       (state == ST_DUMP_MEM_SEND_B2)  ||
+       (state == ST_DUMP_MEM_SEND_B1)  ||
+       (state == ST_DUMP_MEM_SEND_B0)  ||
+       (state == ST_DUMP_MEM_NEXT)     ||
+       (state == ST_DUMP_DONE);
     
 endmodule

@@ -1,7 +1,8 @@
 `timescale 1ns/1ps
 
 module control_unit(
-    input  wire [31:0] instr,
+    //input  wire [31:0] instr,
+    input  wire [6:0] opcode,
 
     output reg  RegWrite,
     output reg  MemRead,
@@ -12,8 +13,8 @@ module control_unit(
     output reg  Jump
 );
 
-    wire [6:0] opcode = instr[6:0];
-    wire [2:0] funct3 = instr[14:12];
+    //wire [6:0] opcode = instr[6:0];
+    // wire [2:0] funct3 = instr[14:12]; // WARNING LINTER: not used
 
     always @* begin
         // Valores por defecto

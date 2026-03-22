@@ -18,14 +18,14 @@ module id_stage #(
     // Señales globales
     input  wire         clk,
     input  wire         reset,
-    input  wire         stall_id,    // reservado para uso futuro (ID/EX)
-    input  wire         flush_idex,  // reservado para uso futuro (ID/EX)
+    // input  wire         stall_id,    // reservado para uso futuro (ID/EX)    // WARNING LINTER: not used
+    // input  wire         flush_idex,  // reservado para uso futuro (ID/EX)    // WARNING LINTER: not used
     
     // Entradas desde IF/ID Register
-    input  wire [31:0]  id_pc,
+    // input  wire [31:0]  id_pc,       // WARNING LINTER: not used
     input  wire [31:0]  id_pc_plus4,
     input  wire [31:0]  id_instr,
-    input  wire         id_valid, // REVISAR uso: puede ser entrada representa burbuja/NOP lógico/flush
+    // input  wire         id_valid, // REVISAR uso: puede ser entrada representa burbuja/NOP lógico/flush  // WARNING LINTER: not used
     
     // Interfaz de write-back hacia el register file
     input  wire         wb_we,
@@ -65,9 +65,9 @@ module id_stage #(
     wire [4:0]       rs2;
     wire [4:0]       rd;
     wire [NB_OP-1:0] alu_op;
-    wire             is_rtype;
-    wire             is_itype;
-    wire signed [11:0] imm_i;  // no lo usamos aquí, pero sale del decoder
+    // wire             is_rtype; // WARNING LINTER: not used
+    // wire             is_itype; // WARNING LINTER: not used
+    // wire signed [11:0] imm_i;  // no lo usamos aquí, pero sale del decoder // WARNING LINTER: not used
 
     // Instancia del decoder (tal cual lo definiste)
     rv_decoder #(
@@ -78,10 +78,14 @@ module id_stage #(
         .rs2     (rs2),
         .rd      (rd),
         .alu_op  (alu_op),
-        .is_rtype(is_rtype),
-        .is_itype(is_itype),
-        .imm_i   (imm_i),
-        .is_lui  (is_lui) // FALTA IMPLEMENTAR
+        //.is_rtype(is_rtype),  // WARNING LINTER: not used
+        .is_rtype(),            // WARNING LINTER: not used
+        //.is_itype(is_itype),  // WARNING LINTER: not used
+        .is_itype(),            // WARNING LINTER: not used
+        //.imm_i   (imm_i), // WARNING LINTER: not used
+        .imm_i   (),        // WARNING LINTER: not used
+        //.is_lui  (is_lui) // FALTA IMPLEMENTAR    // WARNING LINTER: not used
+        .is_lui  ()                                // WARNING LINTER: not used
     );
 
     // ---------------------------------------
@@ -151,7 +155,7 @@ module id_stage #(
     // );
 
     control_unit cu (
-        .instr    (id_instr),
+        .opcode    (id_instr[6:0]),
         .RegWrite (id_RegWrite),
         .MemRead  (id_MemRead),
         .MemWrite (id_MemWrite),
