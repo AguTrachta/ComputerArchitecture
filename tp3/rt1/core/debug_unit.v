@@ -122,14 +122,18 @@ module debug_unit #(
             ST_DUMP_MEM_SEND_B0   = 6'd34,
             ST_DUMP_MEM_NEXT      = 6'd35,
     // Subestados --> DUMP LATCHES
-            ST_DUMP_LATCH_HDR     = 6'd36,
-            ST_DUMP_LATCH_SET_IDX = 6'd37,
-            ST_DUMP_LATCH_LATCH   = 6'd38,
-            ST_DUMP_LATCH_SEND_B3 = 6'd39,
-            ST_DUMP_LATCH_SEND_B2 = 6'd40,
-            ST_DUMP_LATCH_SEND_B1 = 6'd41,
-            ST_DUMP_LATCH_SEND_B0 = 6'd42,
-            ST_DUMP_LATCH_NEXT    = 6'd43;
+            ST_DUMP_LATCH_HDR          = 6'd36,
+            ST_DUMP_LATCH_SET_IDX      = 6'd37,
+            ST_DUMP_LATCH_LATCH        = 6'd38,
+            ST_DUMP_LATCH_SEND_B3      = 6'd39,
+            ST_DUMP_LATCH_SEND_B2      = 6'd40,
+            ST_DUMP_LATCH_SEND_B1      = 6'd41,
+            ST_DUMP_LATCH_SEND_B0      = 6'd42,
+            ST_DUMP_LATCH_NEXT         = 6'd43,
+    // Subestados --> DUMP MEM: recepcion de parametros (paginacion)
+            ST_DUMP_MEM_RD_START_HI    = 6'd44, // Lee byte alto del indice de inicio
+            ST_DUMP_MEM_RD_START_LO    = 6'd45, // Lee byte bajo del indice de inicio
+            ST_DUMP_MEM_RD_COUNT       = 6'd46; // Lee cantidad de palabras a enviar
             
     
     // Estados FSM
@@ -227,9 +231,13 @@ module debug_unit #(
     reg        tx_wr_en_r,    next_tx_wr_en_r;
     
     // Data memory
-    reg        dbg_mem_dump_en_r, next_dbg_mem_dump_en_r;
-    reg [9:0]  dbg_mem_idx_r,     next_dbg_mem_idx_r;
+    reg        dbg_mem_dump_en_r,    next_dbg_mem_dump_en_r;
+    reg [9:0]  dbg_mem_idx_r,        next_dbg_mem_idx_r;
     reg [31:0] dbg_mem_data_latched, next_dbg_mem_data_latched;
+    // Parametros de paginacion del dump de memoria
+    reg [9:0]  dump_mem_start_r,     next_dump_mem_start_r;  // indice de palabra inicial
+    reg [7:0]  dump_mem_count_r,     next_dump_mem_count_r;  // cantidad de palabras a enviar
+    reg [7:0]  dump_mem_sent_r,      next_dump_mem_sent_r;   // palabras enviadas hasta ahora
     
     
     
@@ -279,6 +287,9 @@ module debug_unit #(
             dbg_mem_dump_en_r    <= 1'b0;
             dbg_mem_idx_r        <= 10'd0;
             dbg_mem_data_latched <= 32'd0;
+            dump_mem_start_r     <= 10'd0;
+            dump_mem_count_r     <= 8'd0;
+            dump_mem_sent_r      <= 8'd0;
         end else begin
             state              <= next_state;
             cmd_reg            <= next_cmd_reg;
@@ -319,6 +330,9 @@ module debug_unit #(
             dbg_mem_dump_en_r    <= next_dbg_mem_dump_en_r;
             dbg_mem_idx_r        <= next_dbg_mem_idx_r;
             dbg_mem_data_latched <= next_dbg_mem_data_latched;
+            dump_mem_start_r     <= next_dump_mem_start_r;
+            dump_mem_count_r     <= next_dump_mem_count_r;
+            dump_mem_sent_r      <= next_dump_mem_sent_r;
                         
             // Captura diferida desde FIFO RX
             rx_pop_pending <= next_rx_pop_pending;
@@ -384,6 +398,9 @@ module debug_unit #(
         next_dbg_mem_dump_en_r    = 1'b0;
         next_dbg_mem_idx_r        = dbg_mem_idx_r;
         next_dbg_mem_data_latched = dbg_mem_data_latched;
+        next_dump_mem_start_r     = dump_mem_start_r;
+        next_dump_mem_count_r     = dump_mem_count_r;
+        next_dump_mem_sent_r      = dump_mem_sent_r;
         
         
         // si estaba pendiente una lectura, al próximo ciclo
@@ -421,7 +438,7 @@ module debug_unit #(
                     CMD_STEP:         next_state = ST_STEP_ARM;
                     CMD_DUMP_REGS:    next_state = ST_DUMP_REGS_HDR; //ST_DUMP_REGS;
                     CMD_DUMP_LATCHES: next_state = ST_DUMP_LATCH_HDR;
-                    CMD_DUMP_MEM:     next_state = ST_DUMP_MEM_HDR;
+                    CMD_DUMP_MEM:     next_state = ST_DUMP_MEM_RD_START_HI; // Leer params de paginacion antes de enviar
                     CMD_STOP:         next_state = ST_IDLE; // Revisar si conviene aplicar esto solo cuando esté en ST_RUN_CONTINUOUS.
 //                    CMD_STOP: begin
 //                        if (!i_tx_full) begin
@@ -721,6 +738,50 @@ module debug_unit #(
             
             
             
+            // --------------------------------------------------
+            // Lectura de parametros de paginacion
+            // Protocolo: CMD_DUMP_MEM start_hi start_lo count
+            // --------------------------------------------------
+            ST_DUMP_MEM_RD_START_HI: begin
+                next_pipeline_en_r = 1'b0;
+                next_reset_exec_r  = 1'b0;
+                if (rx_byte_valid) begin
+                    next_dump_mem_start_r = {rx_byte_reg[1:0], 8'd0}; // solo bits [9:8]
+                    next_rx_consume       = 1'b1;
+                    next_state            = ST_DUMP_MEM_RD_START_LO;
+                end else if (!rx_byte_valid && !rx_pop_pending && !i_rx_empty) begin
+                    next_rx_rd_en_r     = 1'b1;
+                    next_rx_pop_pending = 1'b1;
+                end
+            end
+            
+            ST_DUMP_MEM_RD_START_LO: begin
+                next_pipeline_en_r = 1'b0;
+                next_reset_exec_r  = 1'b0;
+                if (rx_byte_valid) begin
+                    next_dump_mem_start_r = {dump_mem_start_r[9:8], rx_byte_reg};
+                    next_rx_consume       = 1'b1;
+                    next_state            = ST_DUMP_MEM_RD_COUNT;
+                end else if (!rx_byte_valid && !rx_pop_pending && !i_rx_empty) begin
+                    next_rx_rd_en_r     = 1'b1;
+                    next_rx_pop_pending = 1'b1;
+                end
+            end
+            
+            ST_DUMP_MEM_RD_COUNT: begin
+                next_pipeline_en_r = 1'b0;
+                next_reset_exec_r  = 1'b0;
+                if (rx_byte_valid) begin
+                    // Clamp: start + count no puede exceder DEPTH_WORDS
+                    next_dump_mem_count_r = (rx_byte_reg == 8'd0) ? 8'd1 : rx_byte_reg;
+                    next_rx_consume       = 1'b1;
+                    next_state            = ST_DUMP_MEM_HDR;
+                end else if (!rx_byte_valid && !rx_pop_pending && !i_rx_empty) begin
+                    next_rx_rd_en_r     = 1'b1;
+                    next_rx_pop_pending = 1'b1;
+                end
+            end
+            
             ST_DUMP_MEM_HDR: begin // Memoria de datos
                 next_pipeline_en_r        = 1'b0;
                 next_reset_exec_r         = 1'b0;
@@ -729,8 +790,9 @@ module debug_unit #(
                 if (!i_tx_full) begin
                     next_tx_data_r            = RESP_DUMP_MEM;
                     next_tx_wr_en_r           = 1'b1;
-                    next_dbg_mem_idx_r        = 10'd0;
+                    next_dbg_mem_idx_r        = dump_mem_start_r; // Empieza en el indice solicitado
                     next_dbg_mem_data_latched = 32'd0;
+                    next_dump_mem_sent_r      = 8'd0;             // Resetea contador de palabras enviadas
                     next_state                = ST_DUMP_MEM_SET_ADDR;
                 end
             end
@@ -829,11 +891,13 @@ module debug_unit #(
                 next_reset_exec_r      = 1'b0;
                 next_dbg_mem_dump_en_r = 1'b1;
             
-                if (dbg_mem_idx_r == DEPTH_WORDS-1) begin
+                if (dump_mem_sent_r + 8'd1 >= dump_mem_count_r) begin
+                    // Se enviaron todas las palabras solicitadas
                     next_state = ST_DUMP_DONE;
                 end else begin
-                    next_dbg_mem_idx_r = dbg_mem_idx_r + 1'b1;
-                    next_state         = ST_DUMP_MEM_SET_ADDR;
+                    next_dump_mem_sent_r = dump_mem_sent_r + 8'd1;
+                    next_dbg_mem_idx_r   = dbg_mem_idx_r + 10'd1;
+                    next_state           = ST_DUMP_MEM_SET_ADDR;
                 end
             end
             
