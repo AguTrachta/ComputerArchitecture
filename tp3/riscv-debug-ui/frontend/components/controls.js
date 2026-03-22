@@ -13,7 +13,7 @@ window.ControlsComponent = {
 
         this.btnConnect.addEventListener('click', async () => {
             try {
-                const res = await Api.connect('/dev/ttyUSB0', 9600);
+                const res = await Api.connect('COM8', 9600);
                 ConsoleComponent.logInfo(res.message);
             } catch (error) {
                 ConsoleComponent.logError(error.message);

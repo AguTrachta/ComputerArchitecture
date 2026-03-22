@@ -124,7 +124,7 @@ module data_mem #(
         .rsta   (reset),
         .ena    (access_ok),
         .wea    (wea_i),
-        .addra  ({22'b0, word_addr}),
+        .addra  (addr),
         .dina   (wdata),
         .douta  (douta)
     );

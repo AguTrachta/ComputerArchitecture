@@ -71,6 +71,11 @@ async def step_cpu() -> OperationResponse:
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        # Always reset state — never leave it stuck at STEPPING
+        if session_state.state == "STEPPING":
+            session_state.state = session_state.idle_state()
+            await publish_event("backend_state", {"state": session_state.state})
 
     return OperationResponse(
         success=True,

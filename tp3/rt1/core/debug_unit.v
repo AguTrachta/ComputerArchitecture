@@ -133,7 +133,8 @@ module debug_unit #(
     // Subestados --> DUMP MEM: recepcion de parametros (paginacion)
             ST_DUMP_MEM_RD_START_HI    = 6'd44, // Lee byte alto del indice de inicio
             ST_DUMP_MEM_RD_START_LO    = 6'd45, // Lee byte bajo del indice de inicio
-            ST_DUMP_MEM_RD_COUNT       = 6'd46; // Lee cantidad de palabras a enviar
+            ST_DUMP_MEM_RD_COUNT       = 6'd46, // Lee cantidad de palabras a enviar
+            ST_DUMP_MEM_WAIT_2         = 6'd47; // Un ciclo extra para la salida sincronica de la BRAM
             
     
     // Estados FSM
@@ -813,7 +814,15 @@ module debug_unit #(
                 next_pipeline_en_r     = 1'b0;
                 next_reset_exec_r      = 1'b0;
                 next_dbg_mem_dump_en_r = 1'b1;
-            
+
+                next_state             = ST_DUMP_MEM_WAIT_2;
+            end
+
+            ST_DUMP_MEM_WAIT_2: begin
+                next_pipeline_en_r     = 1'b0;
+                next_reset_exec_r      = 1'b0;
+                next_dbg_mem_dump_en_r = 1'b1;
+
                 next_state             = ST_DUMP_MEM_LATCH;
             end
             
@@ -1159,6 +1168,7 @@ module debug_unit #(
        (state == ST_DUMP_MEM_HDR)      ||
        (state == ST_DUMP_MEM_SET_ADDR) ||
        (state == ST_DUMP_MEM_WAIT)     ||
+       (state == ST_DUMP_MEM_WAIT_2)   ||
        (state == ST_DUMP_MEM_LATCH)    ||
        (state == ST_DUMP_MEM_SEND_B3)  ||
        (state == ST_DUMP_MEM_SEND_B2)  ||
