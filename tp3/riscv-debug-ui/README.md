@@ -108,7 +108,7 @@ Subset RV32I soportado:
 Tambien incluye:
 
 - labels en dos pasadas
-- registros ABI (`ra`, `sp`, `a0`, etc.) y `x0..x31`
+- registros `x0..x31` alineados con la nomenclatura usada en el RTL
 - validacion de rango de inmediatos y offsets
 - chequeo del limite de `1024` instrucciones de IMEM
 
