@@ -135,7 +135,7 @@ window.Api = {
         return await req('/api/dump/pipeline', 'POST');
     },
 
-    async dumpMemory(offset = 0) {
-        return await req('/api/dump/memory', 'POST', { offset });
+    async dumpMemory(page = 0, pageSize = 32) {
+        return await req('/api/dump/memory', 'POST', { page, page_size: pageSize });
     }
 };

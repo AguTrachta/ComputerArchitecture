@@ -52,6 +52,9 @@ class PipelineDumpResponse(OperationResponse):
 
 class MemoryDumpResponse(OperationResponse):
     dump: MemoryDumpPayload | None = None
+    page: int = 0
+    page_size: int = 32
+    total_pages: int = 0
 
 
 class StatusResponse(BaseModel):

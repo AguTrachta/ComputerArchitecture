@@ -28,6 +28,7 @@ window.ConsoleComponent = {
     logInfo(msg) { this.appendLog(`INFO: ${msg}`, 'info'); },
     logWarn(msg) { this.appendLog(`WARN: ${msg}`, 'warn'); },
     logError(msg) { this.appendLog(`ERROR: ${msg}`, 'error'); },
+    logSuccess(msg) { this.appendLog(`OK: ${msg}`, 'success'); },
     logTx(msg) { this.appendLog(`TX: ${msg}`, 'tx'); },
     logRx(msg) { this.appendLog(`RX: ${msg}`, 'rx'); }
 };

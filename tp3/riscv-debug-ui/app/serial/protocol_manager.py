@@ -124,12 +124,14 @@ class ProtocolManager:
         self._waiters: list[PendingWaiter] = []
         self._pending_program_words = 0
         self._memory_dump_offset = 0
+        self._pending_mem_word_count = 0  # palabras esperadas en la respuesta actual
 
     def reset_runtime(self) -> None:
         self._parser_state = "idle"
         self._payload.clear()
         self._pending_program_words = 0
         self._memory_dump_offset = 0
+        self._pending_mem_word_count = 0
         for waiter in self._waiters:
             if not waiter.future.done():
                 waiter.future.cancel()
@@ -178,18 +180,33 @@ class ProtocolManager:
             timeout=2.0,
         )
 
-    async def dump_memory(self, offset: int = 0) -> ParsedFrame:
-        self._memory_dump_offset = offset
-        # Raw UART transfer time: (1 header + 1024 words * 4 bytes + 1 RESP_DUMP_DONE) * 10 bits / baudrate
-        # The FPGA FSM also spends several clock cycles per word (SET_ADDR, WAIT, LATCH, NEXT states)
-        # which can add significant latency at lower baud rates due to TX FIFO back-pressure.
-        # We add a generous per-word overhead (0.001s / word) on top of raw transfer time
-        # and raise the minimum floor to 30s to handle 9600 baud safely.
-        raw_transfer_s = (1 + (self.MEMORY_DUMP_WORD_COUNT * 4) + 1) * 10 / max(session_state.baudrate, 1)
-        fsm_overhead_s = self.MEMORY_DUMP_WORD_COUNT * 0.001  # ~1ms per word worst case
-        timeout = max(30.0, raw_transfer_s + fsm_overhead_s + 2.0)
+    async def dump_memory(self, page: int = 0, page_size: int = 32) -> ParsedFrame:
+        # Calcula el indice de inicio y clampea al rango valido
+        start_word = page * page_size
+        max_start = max(self.MEMORY_DUMP_WORD_COUNT - 1, 0)
+        start_word = max(0, min(start_word, max_start))
+        # Clampea count para no salirse de los limites de la memoria
+        count = max(1, min(page_size, self.MEMORY_DUMP_WORD_COUNT - start_word))
+        # count debe caber en 1 byte para el protocolo RTL
+        count = min(count, 255)
+
+        self._memory_dump_offset = start_word  # en palabras, para el decoder
+        self._pending_mem_word_count = count
+
+        # Timeout basado en bytes reales a transferir, no en 1024 palabras
+        raw_bytes = 1 + count * 4 + 1  # header + payload + footer
+        raw_transfer_s = raw_bytes * 10 / max(session_state.baudrate, 9600)
+        timeout = max(5.0, raw_transfer_s + 1.0)
+
+        # Protocolo: [CMD_DUMP_MEM][start_hi][start_lo][count]
+        cmd = bytes([
+            self.CMD_DUMP_MEM,
+            (start_word >> 8) & 0xFF,
+            start_word & 0xFF,
+            count & 0xFF,
+        ])
         return await self._send_command(
-            bytes([self.CMD_DUMP_MEM]),
+            cmd,
             "CMD_DUMP_MEM",
             expected_kinds={"memory_dump"},
             timeout=timeout,
@@ -359,7 +376,8 @@ class ProtocolManager:
 
         if self._parser_state == "dump_memory_payload":
             self._payload.append(byte_value)
-            if len(self._payload) == 1 + (self.MEMORY_DUMP_WORD_COUNT * 4):
+            expected_bytes = 1 + (self._pending_mem_word_count * 4)
+            if len(self._payload) == expected_bytes:
                 self._parser_state = "dump_memory_done"
             return []
 
@@ -536,28 +554,24 @@ class ProtocolManager:
             raw_words=[self._format_word(word) for word in words],
         )
 
-    def _decode_memory_dump(self, payload: bytes, offset: int) -> MemoryDumpPayload:
+    def _decode_memory_dump(self, payload: bytes, start_word: int) -> MemoryDumpPayload:
+        """Decodifica `count` palabras del payload. Retorna todas las filas (4 palabras por fila)."""
+        count = len(payload) // 4
         words = [
-            int.from_bytes(payload[index * 4 : (index + 1) * 4], byteorder="big", signed=False)
-            for index in range(self.MEMORY_DUMP_WORD_COUNT)
+            int.from_bytes(payload[i * 4 : (i + 1) * 4], byteorder="big", signed=False)
+            for i in range(count)
         ]
-        max_offset = max((self.MEMORY_DUMP_WORD_COUNT * 4) - 16, 0)
-        normalized_offset = max(0, min(offset, max_offset))
-        row_base = normalized_offset // 16
 
         rows = []
-        for row_offset in range(self.MEMORY_ROWS_PER_RESPONSE):
-            row_index = row_base + row_offset
-            word_index = row_index * 4
-            if word_index >= len(words):
+        for row_idx in range(0, count, 4):
+            word_group = words[row_idx : row_idx + 4]
+            if not word_group:
                 break
-
-            address = row_index * 16
-            row_words = words[word_index : word_index + 4]
+            address = (start_word + row_idx) * 4  # byte address
             rows.append(
                 MemoryDumpRow(
                     address=f"0x{address:08X}",
-                    values=[self._format_word(word) for word in row_words],
+                    values=[self._format_word(w) for w in word_group],
                 )
             )
 

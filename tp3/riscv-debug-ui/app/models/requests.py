@@ -7,5 +7,7 @@ class ProgramTextRequest(BaseModel):
     asm: str = Field(min_length=1)
 
 
+
 class MemoryDumpRequest(BaseModel):
-    offset: int = Field(default=0, ge=0, le=0xFFC)
+    page: int = Field(default=0, ge=0)
+    page_size: int = Field(default=32, ge=1, le=255)

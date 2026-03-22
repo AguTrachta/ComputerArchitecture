@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from fastapi import APIRouter, HTTPException
 
 from app.core.state import session_state
@@ -48,21 +50,27 @@ async def dump_pipeline() -> PipelineDumpResponse:
     )
 
 
+
 @router.post("/api/dump/memory", response_model=MemoryDumpResponse)
 async def dump_memory(req: MemoryDumpRequest | None = None) -> MemoryDumpResponse:
     _require_connection()
     request = req or MemoryDumpRequest()
 
     try:
-        frame = await protocol_manager.dump_memory(request.offset)
+        frame = await protocol_manager.dump_memory(request.page, request.page_size)
     except TimeoutError as exc:
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    total_pages = math.ceil(protocol_manager.MEMORY_DUMP_WORD_COUNT / request.page_size)
+
     return MemoryDumpResponse(
         success=True,
-        message="Memory dump received.",
+        message=f"Memory dump page {request.page}/{total_pages - 1} received.",
         state=session_state.state,
         dump=frame.payload,
+        page=request.page,
+        page_size=request.page_size,
+        total_pages=total_pages,
     )

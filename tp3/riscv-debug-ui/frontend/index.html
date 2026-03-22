@@ -155,19 +155,33 @@
 
                 <!-- Tab: Mem -->
                 <div id="tab-mem" class="tab-pane" style="display:none;">
+                    <!-- Pagination controls -->
                     <div class="mem-controls">
-                        <input type="text" id="mem-offset" placeholder="Offset Ex: 0x000" class="input-text">
-                        <button id="btn-read-mem" class="btn secondary small">Leer</button>
+                        <button id="btn-mem-first"   class="btn ghost small" title="Primera página">⏮</button>
+                        <button id="btn-mem-prev"    class="btn ghost small" title="Página anterior">◀</button>
+                        <span   id="mem-page-label"  class="mem-page-label">Pág - / -</span>
+                        <button id="btn-mem-next"    class="btn ghost small" title="Siguiente página">▶</button>
+                        <button id="btn-mem-refresh" class="btn secondary small" title="Refrescar página actual">↺</button>
                     </div>
-                    <div class="table-container">
-                        <table id="mem-table" class="data-table code-table">
-                            <thead>
-                                <tr><th>Addr</th><th>+0</th><th>+4</th><th>+8</th><th>+C</th></tr>
-                            </thead>
-                            <tbody>
-                                <!-- Populate via JS -->
-                            </tbody>
-                        </table>
+
+                    <!-- Table with loading overlay wrapper -->
+                    <div class="mem-table-wrapper">
+                        <!-- Loading overlay -->
+                        <div id="mem-loading" class="mem-loading-overlay" style="display:none;">
+                            <div class="mem-spinner"></div>
+                            <span id="mem-progress-text" class="mem-progress-text"></span>
+                        </div>
+
+                        <div class="table-container">
+                            <table id="mem-table" class="data-table code-table">
+                                <thead>
+                                    <tr><th>Addr</th><th>+0</th><th>+4</th><th>+8</th><th>+C</th></tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populate via JS -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
