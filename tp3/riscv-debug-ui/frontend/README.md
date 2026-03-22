@@ -20,11 +20,11 @@ Ahora consume:
 - `state.js`: estado reactivo compartido para conexion, CPU y capacidades.
 - `components/editor.js`: validacion, ensamblado y ejemplo ASM valido.
 - `components/controls.js`: acciones reales contra la API y bloqueo de botones segun estado/capacidades.
-- `components/registers.js`: render de 32 registros.
+- `components/registers.js`: render de 32 registros usando solo nombres `x0..x31` en la tabla.
 - `components/pipeline.js`: render del dump real de latches en `Global`, `IF/ID`, `ID/EX`, `EX/MEM` y `MEM/WB`.
-- `components/memory.js`: render del dump de memoria o placeholder mientras el RTL no entregue payload real.
+- `components/memory.js`: render de una ventana del dump real de memoria de datos.
 - `components/console.js`: log visual de API, TX, RX, warnings y errores.
 
 ## Nota
 
-`dump_pipeline` ya consume el payload real de latches del RTL. `dump_memory` sigue mostrando placeholder porque ese dump todavia no entrega payload estructurado.
+`dump_pipeline` y `dump_memory` ya consumen payload real del RTL. La vista de memoria muestra una ventana filtrada por offset aunque el hardware transmita la DMEM completa.

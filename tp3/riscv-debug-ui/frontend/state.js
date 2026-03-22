@@ -19,7 +19,7 @@ window.AppState = {
         can_dump_pipeline: true,
         can_dump_pipeline_full_payload: true,
         can_dump_memory: true,
-        can_dump_memory_full_payload: false,
+        can_dump_memory_full_payload: true,
         can_reset_exec_independent: false
     },
     listeners: [],

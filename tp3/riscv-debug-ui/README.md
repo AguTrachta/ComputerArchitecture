@@ -23,7 +23,7 @@ Abrir `http://localhost:8080/`.
 - [x] Punto 1: modelado de datos tipado con Pydantic.
 - [x] Punto 2: parser UART RX real alineado con `rt1/core/debug_unit.v`.
 - [x] Punto 3: assembler local RV32I en el backend.
-- [~] Punto 4: dump real de latches completado; dump real de memoria todavia pendiente de RTL.
+- [x] Punto 4: dump real de latches y dump real de memoria integrados en la UI.
 
 ## Lo Implementado En Esta Iteracion
 
@@ -76,7 +76,7 @@ ACKs y respuestas parseadas:
 - `C4` run end
 - `D0 + 128 bytes + D5` dump de 32 registros
 - `D1 + 100 bytes + D5` dump real de 25 words de latches del pipeline
-- `D2 + D5` placeholder de memoria
+- `D2 + 4096 bytes + D5` dump real de 1024 words de memoria de datos
 
 Detalles relevantes:
 
@@ -131,7 +131,7 @@ Tambien incluye:
 
 - `POST /api/dump/regs`: espera y devuelve el dump estructurado.
 - `POST /api/dump/pipeline`: devuelve el dump real de latches parseado desde `RESP_DUMP_LATCH`.
-- `POST /api/dump/memory`: devuelve placeholder honesto mientras no exista payload RTL.
+- `POST /api/dump/memory`: devuelve una ventana estructurada del dump real de memoria parseado desde `RESP_DUMP_MEM`.
 
 ### Estado
 
@@ -152,13 +152,11 @@ Cambios concretos:
   - capacidades declaradas
 - consume dumps reales de registros
 - consume dump real de pipeline/latches en las etapas `Global`, `IF/ID`, `ID/EX`, `EX/MEM` y `MEM/WB`
-- muestra placeholder de memoria con `valid: false`
+- consume dump real de memoria y lo pagina por offset en la pestaña `Mem`
 - el editor carga por defecto ASM valido para el assembler implementado
 - la pagina queda fija en viewport y el scroll de la pestaña `Regs` ocurre dentro de su propia tabla
 
 ## Limitaciones Vigentes
 
-- El RTL actual todavia no envia payload real para `dump_memory`.
-- El dump de latches ya es real, pero el dump de memoria sigue siendo placeholder.
-
-Cuando exista el dump real de memoria, la extension esperada es directa: ampliar parser + modelo de `MemoryDumpPayload` y reutilizar la misma arquitectura REST/WebSocket ya cerrada.
+- El dump de memoria devuelve una ventana de filas filtrada por offset, aunque el hardware transmita toda la DMEM completa.
+- `Clear DMEM` y reset independiente siguen pendientes de RTL/comando dedicado.

@@ -84,6 +84,8 @@ class PendingWaiter:
 
 class ProtocolManager:
     PIPELINE_DUMP_WORD_COUNT = 25
+    MEMORY_DUMP_WORD_COUNT = 1024
+    MEMORY_ROWS_PER_RESPONSE = 8
 
     CMD_PROG_BEGIN = 0x10
     CMD_PROG_END = 0x11
@@ -178,11 +180,15 @@ class ProtocolManager:
 
     async def dump_memory(self, offset: int = 0) -> ParsedFrame:
         self._memory_dump_offset = offset
+        timeout = max(
+            6.0,
+            ((1 + (self.MEMORY_DUMP_WORD_COUNT * 4) + 1) * 10 / max(session_state.baudrate, 1)) + 1.0,
+        )
         return await self._send_command(
             bytes([self.CMD_DUMP_MEM]),
             "CMD_DUMP_MEM",
             expected_kinds={"memory_dump"},
-            timeout=2.0,
+            timeout=timeout,
         )
 
     async def program_words(self, words: list[int]) -> ParsedFrame:
@@ -281,7 +287,7 @@ class ProtocolManager:
                 return []
 
             if byte_value == self.RESP_DUMP_MEM:
-                self._parser_state = "dump_memory_done"
+                self._parser_state = "dump_memory_payload"
                 self._payload = bytearray([byte_value])
                 return []
 
@@ -347,8 +353,14 @@ class ProtocolManager:
                 )
             ]
 
+        if self._parser_state == "dump_memory_payload":
+            self._payload.append(byte_value)
+            if len(self._payload) == 1 + (self.MEMORY_DUMP_WORD_COUNT * 4):
+                self._parser_state = "dump_memory_done"
+            return []
+
         if self._parser_state == "dump_memory_done":
-            header = bytes(self._payload)
+            payload = bytes(self._payload)
             self._parser_state = "idle"
             self._payload = bytearray()
             if byte_value != self.RESP_DUMP_DONE:
@@ -356,12 +368,12 @@ class ProtocolManager:
                     ParsedFrame(
                         kind="error",
                         text="Trama DUMP_MEM incompleta: falta RESP_DUMP_DONE.",
-                        raw_bytes=[f"{byte:02X}" for byte in header] + [byte_hex],
+                        raw_bytes=[f"{byte:02X}" for byte in payload] + [byte_hex],
                     )
                 ]
-            payload = self._build_placeholder_memory_dump(self._memory_dump_offset)
-            raw_bytes = [f"{byte:02X}" for byte in header] + [byte_hex]
-            return [ParsedFrame(kind="memory_dump", text="RESP_DUMP_MEM", raw_bytes=raw_bytes, payload=payload)]
+            memory_dump = self._decode_memory_dump(payload[1:], self._memory_dump_offset)
+            raw_bytes = [f"{byte:02X}" for byte in payload] + [byte_hex]
+            return [ParsedFrame(kind="memory_dump", text="RESP_DUMP_MEM", raw_bytes=raw_bytes, payload=memory_dump)]
 
         self._parser_state = "idle"
         self._payload = bytearray()
@@ -432,12 +444,6 @@ class ProtocolManager:
         if frame.kind == "memory_dump":
             session_state.record_memory_dump(frame.payload)
             events.append(build_event("mem_dump", frame.payload))
-            events.append(
-                build_event(
-                    "warning",
-                    {"message": "El RTL actual solo devuelve un placeholder para dump_memory."},
-                )
-            )
             return events
 
         if frame.kind == "dump_done":
@@ -526,18 +532,32 @@ class ProtocolManager:
             raw_words=[self._format_word(word) for word in words],
         )
 
-    def _build_placeholder_memory_dump(self, offset: int) -> MemoryDumpPayload:
+    def _decode_memory_dump(self, payload: bytes, offset: int) -> MemoryDumpPayload:
+        words = [
+            int.from_bytes(payload[index * 4 : (index + 1) * 4], byteorder="big", signed=False)
+            for index in range(self.MEMORY_DUMP_WORD_COUNT)
+        ]
+        max_offset = max((self.MEMORY_DUMP_WORD_COUNT * 4) - 16, 0)
+        normalized_offset = max(0, min(offset, max_offset))
+        row_base = normalized_offset // 16
+
         rows = []
-        for row_index in range(8):
-            address = offset + (row_index * 16)
+        for row_offset in range(self.MEMORY_ROWS_PER_RESPONSE):
+            row_index = row_base + row_offset
+            word_index = row_index * 4
+            if word_index >= len(words):
+                break
+
+            address = row_index * 16
+            row_words = words[word_index : word_index + 4]
             rows.append(
                 MemoryDumpRow(
                     address=f"0x{address:08X}",
-                    values=["--------", "--------", "--------", "--------"],
+                    values=[self._format_word(word) for word in row_words],
                 )
             )
 
-        return MemoryDumpPayload(valid=False, rows=rows)
+        return MemoryDumpPayload(valid=True, source="rtl_dump_memory", rows=rows)
 
     def _decode_alu_op(self, value: int) -> str:
         return ALU_OP_NAMES.get(value & 0x3F, f"UNKNOWN_{value & 0x3F:06b}")

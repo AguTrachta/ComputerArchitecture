@@ -4,7 +4,6 @@ window.RegistersComponent = {
         this.updateRegs(
             Array.from({ length: 32 }, (_, index) => ({
                 name: `x${index}`,
-                alias: '-',
                 hex: '0x00000000',
                 dec: 0
             }))
@@ -19,7 +18,6 @@ window.RegistersComponent = {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td><strong>${reg.name}</strong></td>
-                <td>${reg.alias}</td>
                 <td class="code-text">${reg.hex}</td>
                 <td>${reg.dec}</td>
             `;

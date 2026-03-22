@@ -214,7 +214,6 @@ La arquitectura de software debe distinguir entre:
 
 ### Funcionalidades preparadas en interfaz pero dependientes de RTL
 
-* dump real de memoria de datos,
 * clear de memoria de datos,
 * reset completo del sistema por comando independiente.
 
@@ -831,7 +830,7 @@ El backend debería mantener una estructura de capacidades, por ejemplo:
   "can_dump_regs": true,
   "can_dump_pipeline": true,
   "can_dump_pipeline_full_payload": true,
-  "can_dump_memory_full_payload": false,
+  "can_dump_memory_full_payload": true,
   "can_reset_exec_independent": false
 }
 ```
