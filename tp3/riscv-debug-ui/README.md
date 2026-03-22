@@ -1,65 +1,164 @@
 # RISC-V Debug UI
 
-Bienvenido al sistema **RISC-V Debug UI**, una pieza de software *Full-Stack* (Interfáz de Usuario + Driver de Comunicación) diseñada para inyectar programas en ROM y extraer el estado interno completo y en tiempo real del pipeline de un procesador RISC-V operando nativamente en una FPGA.
+Frontend + backend local para programar la IMEM del core RISC-V por UART, controlar la ejecucion y visualizar el estado observable que expone la Debug Unit.
 
----
+## Arquitectura
 
-## 🏗️ Arquitectura General Implementada
+- `frontend/`: SPA en HTML/CSS/Vanilla JS. Consume REST para operaciones discretas y WebSocket para eventos en tiempo real.
+- `app/`: backend FastAPI en Python. Contiene el manejo de estado, protocolo UART, assembler y publicacion de eventos.
+- `docs/ARQUITECTURA_FRONTEND_BACKEND.md`: documento de referencia de la arquitectura y roadmap.
 
-El sistema se ejecuta en un modelo unificado servidor-cliente pero lógicamente desacoplado según lo definido original en la especificación arquitectónica (`docs/ARQUITECTURA_FRONTEND_BACKEND.md`):
+## Ejecutar
 
-1. **Frontend (`frontend/`)**: 
-   - Vista interactiva pura en Vanilla JS/CSS ("Glassmorphism Dark Layout").
-   - Utiliza llamadas `fetch` nativas para consumir la API REST del backend con promesas asíncronas.
-   - Conexión persistente mediante instancias de `WebSocket` puro para recibir eventos emitidos (UART logs, dumps de hardware).
-   - El DOM reacciona a la propagación del flujo de WebSockets en tiempo real sin recargar jamás la página.
+```bash
+cd riscv-debug-ui
+uv pip install -e .
+uv run uvicorn app.main:app --reload --port 8080
+```
 
-2. **Backend (`app/`)**: 
-   - Desarrollado en **Python 3.10+ (FastAPI)** y gestionado rápidamente mediante `uv`.
-   - **`serial_manager.py`**: Interfaz nativa `pyserial` que detecta puertos COM físicos presentes, abriendo el canal de 8 Bits + Parity None a `9600 baud`.
-   - **`protocol_manager.py`**: Convierte acciones HTTP a *Raw Bytes* de control enviados a la placa.
-   - **`assembler.py`**: Módulo base interceptor del String ASM (preparado estructuralmente para limitar a 1024 instrucciones y transpolar).
-   - **Background Async UART Listener**: Un *worker loop* interno en la app FastApi que bloquea imperceptiblemente esperando bits entrantes de la FPGA, y los reparte por toda la red de `WebSocket Broadcast` al vuelo.
+Abrir `http://localhost:8080/`.
 
----
+## Estado Del Roadmap
 
-## ⚡ Ejecutar el Sistema: Un Solo Comando 
+- [x] Punto 1: modelado de datos tipado con Pydantic.
+- [x] Punto 2: parser UART RX real alineado con `rt1/core/debug_unit.v`.
+- [x] Punto 3: assembler local RV32I en el backend.
+- [ ] Punto 4: dump real de latches y dump real de memoria pendientes de RTL.
 
-Para simplificar el uso y evitar dolores de cabeza con validadores de origen de recursos cruzados (CORS), FastAPI absorbe y entrega el Frontend estáticamente en la URL base.
+## Lo Implementado En Esta Iteracion
 
-Para arrancar todo el sistema integrado:
+### 1. Modelos y estado tipado
 
-1. Posicionate en la terminal sobre la carpeta raíz (`riscv-debug-ui`):
-   ```bash
-   cd riscv-debug-ui
-   ```
-2. Resolvé las capas Python e iniciá el servidor ASGI (`uvicorn`) de un solo golpe:
-   ```bash
-   uv pip install -e .
-   uv run uvicorn app.main:app --reload --port 8080
-   ```
-3. Dirígete en cualquier navegador moderno a: **`http://localhost:8080/`**
+Se agregaron:
 
----
+- `app/models/requests.py`
+- `app/models/responses.py`
+- `app/models/dumps.py`
 
-## 🗺️ Roadmap Técnico Restante (Según Especificaciones Finales)
+El backend ahora tipa:
 
-Al cotejar el avance estructural real provisto con el documento dictaminador `ARQUITECTURA_FRONTEND_BACKEND.md`, hemos dado por consolidados los Puntos de la fase de planeamiento **Wireframe (UI)**,  **Infraestructura Backend WebSockets/FastAPI** (Python y pyserial) y **Layout Vanilla SPA** (Frontend nativo asincrónico directo).
+- estado de sesion
+- capacidades declaradas por software
+- dump de registros
+- dump de pipeline
+- dump de memoria
+- respuestas de validacion, ensamblado, carga y control
 
-El tramo de **Acople Final FPGA-Software** consta de los siguientes 4 puntos técnicos inamovibles para ser declarados listos para producción:
+`app/core/state.py` tambien guarda:
 
-### 1. Modelado Crítico de Datos (Pydantic / Encoders)
-- *Referencia Doc: Sección 11 y 24.3.*
-- Aterrizar y estandarizar formalmente en el servidor las estructuras JSON solicitadas creando los modelos `app/models/dumps.py` y `app/models/responses.py` en Pydantic. Las estructuras del *Pipeline* de 5 Etapas del RTL y los 32 Registros deben ser tipadas estrictamente aquí en Python.
+- si hay programa cargado
+- cantidad de instrucciones cargadas
+- cantidad de steps ejecutados
+- ultimo error
+- ultimos dumps recibidos
 
-### 2. Máquina de Estados UART en el Backend (RX Parser)
-- *Referencia Doc: Sección 6.2.*
-- Actualmente `main.py` agarra de a 1 Byte (`serial.read(1)`) y lo inyecta como texto *hex-crudo* al Websocket de la Interfaz. Necesitamos evolucionar `app/serial/protocol_manager.py` con una rutina o máquina de estados descodificadora nativa que analice Header, Payload Largo y Finalización de Trama, traduzca ese grupo consecutivo de valores a nuestros modelos Pydantic (Registros o Memoria) y ahí recién, inyectar el *Dump finalizado y validado* al Frontend Web.
+### 2. Protocolo UART real
 
-### 3. Implementación Efectiva de Traducción Assembler
-- *Referencia Doc: 10.4 ProgramManager / Assembler.*
-- Desplazar el comportamiento simulado que asiste la interfaz (inyectado de NOPs) dentro de `app/program/assembler.py` e intercambiarlo por la lógica nativa de tu intérprete ensamblador (ya sea linkeando al proceso `riscv32-unknown-elf-gcc` u otro script local). Validar que la compilación de strings finalice entregando un arreglo de words listos de 32 Bits conformando el límite en piedra dictado de `1024 instrucciones / 4096 bytes`.
+`app/serial/protocol_manager.py` ya no usa opcodes inventados ni envia words little-endian.
 
-### 4. Definición y Acople del Comportamiento Operativo RTL Real
-- *Referencia Doc: Sección 7.4.*
-- Sentarnos con código Verilog en mano para validar qué capacidades experimentales incluidas en la UI hoy (por ejemplo observar variables puntuales en los Latches como `ID/EX` y `EX/MEM` o limpiezas asíncronas *Clear DMEM*) están listas para salir y programadas en la FPGA. Si la lógica del Silicio no se equipara a los *Dumps* creados en nuestro Endpoint de la Interfaz, estas deberán esconderse detrás de flags (ej `capabilities["can_dump_pipeline"] = False`).
+Comandos alineados con el RTL:
+
+- `CMD_PROG_BEGIN = 0x10`
+- `CMD_RUN = 0x20`
+- `CMD_STEP = 0x21`
+- `CMD_STOP = 0x22`
+- `CMD_DUMP_REGS = 0x30`
+- `CMD_DUMP_LATCHES = 0x31`
+- `CMD_DUMP_MEM = 0x32`
+- `CMD_CLEAR_IMEM = 0x40`
+
+ACKs y respuestas parseadas:
+
+- `C0` clear IMEM ok
+- `C1` program ok
+- `C2` step ok
+- `C3` stop ok
+- `C4` run end
+- `D0 + 128 bytes + D5` dump de 32 registros
+- `D1 + D5` placeholder de pipeline
+- `D2 + D5` placeholder de memoria
+
+Detalles relevantes:
+
+- La carga de programa envia longitud en 2 bytes big-endian.
+- Cada instruccion se transmite como word de 32 bits big-endian.
+- El listener UART ahora consume bytes disponibles sin bloquear el event loop.
+- Los eventos WebSocket que salen del backend ya son estructurados: `uart_tx`, `uart_rx`, `backend_state`, `regs_dump`, `pipeline_dump`, `mem_dump`, `warning`, `error`.
+
+### 3. Assembler local
+
+`app/program/assembler.py` reemplaza el mock que devolvia NOPs.
+
+Backend de ensamblado:
+
+- si el sistema encuentra un toolchain GNU RISC-V (`riscv*-gcc` + `objcopy`), lo usa automaticamente
+- si no lo encuentra, cae al ensamblador local incluido en Python
+- tambien se puede forzar la deteccion con `RISCV_GNU_GCC` y `RISCV_OBJCOPY`
+
+Subset RV32I soportado:
+
+- R-type: `add`, `sub`, `sll`, `slt`, `sltu`, `xor`, `srl`, `sra`, `or`, `and`
+- I-type: `addi`, `slti`, `sltiu`, `xori`, `ori`, `andi`, `slli`, `srli`, `srai`
+- Loads/stores: `lb`, `lh`, `lw`, `lbu`, `lhu`, `sb`, `sh`, `sw`
+- Control flow: `beq`, `bne`, `blt`, `bge`, `bltu`, `bgeu`, `jal`, `jalr`
+- U-type: `lui`, `auipc`
+- Pseudoinstrucciones de una sola word: `nop`, `j`, `jr`, `ret`, `mv`, `halt`
+- Directiva: `.word`
+
+Tambien incluye:
+
+- labels en dos pasadas
+- registros ABI (`ra`, `sp`, `a0`, etc.) y `x0..x31`
+- validacion de rango de inmediatos y offsets
+- chequeo del limite de `1024` instrucciones de IMEM
+
+## Cambios En La API
+
+### Programa
+
+- `POST /api/program/validate`: devuelve errores, warnings, cantidad de instrucciones y uso de IMEM.
+- `POST /api/program/assemble`: devuelve el listing hex y las words ensambladas.
+- `POST /api/program/load`: ensambla, programa por UART y espera `RESP_OK_PROG`.
+- `POST /api/program/clear-imem`: espera `RESP_OK_CLEAR`.
+
+### Control
+
+- `POST /api/control/run`: envia `CMD_RUN` y deja el backend en `RUNNING`.
+- `POST /api/control/stop`: espera `RESP_OK_STOP`.
+- `POST /api/control/step`: espera `RESP_OK_STEP` y luego dispara automaticamente `dump_regs`.
+
+### Dumps
+
+- `POST /api/dump/regs`: espera y devuelve el dump estructurado.
+- `POST /api/dump/pipeline`: devuelve placeholder honesto mientras no exista payload RTL.
+- `POST /api/dump/memory`: devuelve placeholder honesto mientras no exista payload RTL.
+
+### Estado
+
+- `GET /status`: devuelve conexion, estado CPU, programa cargado, capacidades y ultimos dumps.
+
+## Frontend
+
+La UI ya no depende de mocks para `step` ni memoria.
+
+Cambios concretos:
+
+- sincroniza el estado inicial desde `GET /status`
+- conecta/desconecta WebSocket en base al estado real de conexion
+- habilita o deshabilita botones segun:
+  - conexion
+  - estado CPU
+  - programa cargado
+  - capacidades declaradas
+- consume dumps reales de registros
+- muestra placeholders de pipeline y memoria con `valid: false`
+- el editor carga por defecto ASM valido para el assembler implementado
+- la pagina queda fija en viewport y el scroll de la pestaña `Regs` ocurre dentro de su propia tabla
+
+## Limitaciones Vigentes
+
+- El RTL actual todavia no envia payload real para `dump_pipeline`.
+- El RTL actual todavia no envia payload real para `dump_memory`.
+- Por eso ambos endpoints y la UI estan listos, pero el contenido visible sigue siendo placeholder.
+
+Cuando exista el latch dump real, la extension esperada es directa: ampliar modelos + parser en `protocol_manager.py` y reutilizar la misma arquitectura REST/WebSocket ya cerrada.

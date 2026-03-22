@@ -1,41 +1,30 @@
-# RISC-V Debug UI Frontend MVP
+# Frontend RISC-V Debug UI
 
-Este es el frontend MVP (Vanilla HTML/CSS/JS) diseñado según la arquitectura descrita en `ARQUITECTURA_FRONTEND_BACKEND.md`.
+Frontend en Vanilla JS/CSS/HTML servido por FastAPI desde la raiz del backend.
 
-## 📁 Estructura de Archivos
+## Estado actual
 
-* `index.html`: La estructura principal del DOM (wireframe layout). Incluye las columnas: **PROGRAMA**, **CONTROL** y **OBSERVABILIDAD**.
-* `styles.css`: Define el estilo visual. Tiene variables nativas para *Dark Mode*, fuentes modernas y efectos *Glassmorphism*. No requiere Tailwind ni frameworks externos.
-* `state.js`: El cerebro reactivo del MVP. Mantiene el estado local (Conexión, Estado de CPU) e implementa el patrón Observer.
-* `api.js`: Simula llamadas asincrónicas a los endpoints REST del backend. Los botones interactúan con estos mocks de forma transparente aportando validación visual del flujo.
-* `ws.js`: Módulo mock de WebSocket para inyectar eventos de backend directamente al frontend.
-* `app.js`: El punto de entrada principal. Configura Listeners, los Tabs y actualiza la Barra Superior de la UI.
-* `components/`:
-  * `editor.js`: Código del panel de texto (ASM), Validación y Traducción (y muestra de HEX colapsable generado).
-  * `controls.js`: Acciones de Conexión, Programación FPGA, Ejecución (`Run`, `Stop`, `Step`) y dumps. **Probalo dándole a 'Step' o 'Run' para ver la propagación.**
-  * `registers.js`: Actualiza la tabla de registros en el Tab `Regs`.
-  * `memory.js`: Muestra y pide los bytes en el Tab `Mem` (mediante mock payload).
-  * `pipeline.js`: Renders dinámicos del pipeline, colapsables nativos (`<details>`). Respeta los estados iniciales "abiertos por defecto" (`Global`, `IF/ID`, `ID/EX`, `EX/MEM`, `MEM/WB`).
-  * `console.js`: Agrega logs locales.
+El frontend ya no funciona con eventos emulados.
 
-## 🚀 Cómo Testear Localmente
+Ahora consume:
 
-Al no utilizar bundlers como Webpack o Vite, podés servir este directorio de forma rápida creando un simple servidor HTTP en cualquier terminal o en VS Code.
+- REST para conexion, programacion, control y dumps
+- WebSocket para `uart_tx`, `uart_rx`, `backend_state`, `regs_dump`, `pipeline_dump`, `mem_dump`, `warning` y `error`
+- `GET /status` para hidratar el estado inicial de la UI
 
-### Opcion 1: Usando Python (Recomendado)
-Abre PowerShell o tu terminal dentro del directorio actual (`frontend`) y ejecuta:
-```bash
-python -m http.server 8000
-```
-Luego navegá a `http://localhost:8000/`.
+## Componentes
 
-### Opción 2: Usando VS Code
-Si tenés instalada la extensión **Live Server**, simplemente hace click derecho sobre `index.html` y selecciona **"Open with Live Server"**.
+- `app.js`: inicializa tabs, sincroniza indicadores superiores y carga el estado inicial.
+- `api.js`: cliente REST real.
+- `ws.js`: cliente WebSocket real con reconexion basica.
+- `state.js`: estado reactivo compartido para conexion, CPU y capacidades.
+- `components/editor.js`: validacion, ensamblado y ejemplo ASM valido.
+- `components/controls.js`: acciones reales contra la API y bloqueo de botones segun estado/capacidades.
+- `components/registers.js`: render de 32 registros.
+- `components/pipeline.js`: render de etapas y placeholders del dump de latches.
+- `components/memory.js`: render del dump de memoria o placeholder mientras el RTL no entregue payload real.
+- `components/console.js`: log visual de API, TX, RX, warnings y errores.
 
-## 📝 Probando la Interfaz (Mocks)
-Los botones ya tienen lógica emulada (delays) que actualiza el estado gráfico:
-1. Haz clic en **Conectar** (simulará una conexión demorada).
-2. Agrega código ASM en el Editor y clickeá **Traducir** (observá el panel HEX colapsable).
-3. Haz clic en **Programar FPGA** (verás el estado pasar a PROGRAMMING).
-4. Dale a la pestaña de Observabilidad **Pipeline**, y haz clic en **Step ⏭** bajo *Control*.
-5. Verás cómo llegan `Eventos WebSocket` emulados y actualizan automáticamente el flujo del pipeline (Regs y Pipeline se actualizan dinámicamente).
+## Nota
+
+`dump_pipeline` y `dump_memory` siguen mostrando placeholders porque el RTL actual todavia no entrega payload estructurado para esos dumps.
