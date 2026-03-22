@@ -180,10 +180,14 @@ class ProtocolManager:
 
     async def dump_memory(self, offset: int = 0) -> ParsedFrame:
         self._memory_dump_offset = offset
-        timeout = max(
-            6.0,
-            ((1 + (self.MEMORY_DUMP_WORD_COUNT * 4) + 1) * 10 / max(session_state.baudrate, 1)) + 1.0,
-        )
+        # Raw UART transfer time: (1 header + 1024 words * 4 bytes + 1 RESP_DUMP_DONE) * 10 bits / baudrate
+        # The FPGA FSM also spends several clock cycles per word (SET_ADDR, WAIT, LATCH, NEXT states)
+        # which can add significant latency at lower baud rates due to TX FIFO back-pressure.
+        # We add a generous per-word overhead (0.001s / word) on top of raw transfer time
+        # and raise the minimum floor to 30s to handle 9600 baud safely.
+        raw_transfer_s = (1 + (self.MEMORY_DUMP_WORD_COUNT * 4) + 1) * 10 / max(session_state.baudrate, 1)
+        fsm_overhead_s = self.MEMORY_DUMP_WORD_COUNT * 0.001  # ~1ms per word worst case
+        timeout = max(30.0, raw_transfer_s + fsm_overhead_s + 2.0)
         return await self._send_command(
             bytes([self.CMD_DUMP_MEM]),
             "CMD_DUMP_MEM",
