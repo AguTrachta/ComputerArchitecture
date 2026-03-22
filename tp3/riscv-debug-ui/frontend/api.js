@@ -1,88 +1,116 @@
-/**
- * api.js
- * Real REST API integration for RISC-V Debug UI.
- */
-const BASE_URL = window.location.origin.includes('5500') || window.location.origin.includes('8000') 
-    ? 'http://localhost:8080' : ''; // Relative if served from fastAPI directly
+const BASE_URL = window.location.origin.includes('5500') || window.location.origin.includes('8000')
+    ? 'http://localhost:8080'
+    : '';
 
-const req = async (endpoint, method = 'GET', body = null) => {
+const extractErrorMessage = async (response) => {
     try {
-        const options = {
-            method,
-            headers: { 'Content-Type': 'application/json' }
-        };
-        if (body) options.body = JSON.stringify(body);
-        
-        // Appends to the base URL assuming `/api/...` or root paths
-        let path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-        
-        const response = await fetch(`${BASE_URL}${path}`, options);
-        if(!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        return await response.json();
-    } catch (e) {
-        ConsoleComponent.logError(`API Error en ${endpoint}: ${e.message}`);
-        throw e;
+        const data = await response.json();
+        if (typeof data?.detail === 'string') return data.detail;
+        if (Array.isArray(data?.detail?.errors)) return data.detail.errors.join(' | ');
+        if (typeof data?.detail === 'object') return JSON.stringify(data.detail);
+        return JSON.stringify(data);
+    } catch (_error) {
+        return `HTTP ${response.status}`;
     }
 };
 
+const req = async (endpoint, method = 'GET', body = null) => {
+    const options = {
+        method,
+        headers: { 'Content-Type': 'application/json' }
+    };
+
+    if (body !== null) {
+        options.body = JSON.stringify(body);
+    }
+
+    const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const response = await fetch(`${BASE_URL}${path}`, options);
+
+    if (!response.ok) {
+        const message = await extractErrorMessage(response);
+        ConsoleComponent.logError(`API Error en ${endpoint}: ${message}`);
+        throw new Error(message);
+    }
+
+    if (response.status === 204) return null;
+    return await response.json();
+};
+
+const syncStatus = async () => {
+    const status = await req('/status', 'GET');
+    AppState.setStatus(status);
+    return status;
+};
+
 window.Api = {
-    // 13.1 Conexión
     async getPorts() {
         return await req('/ports', 'GET');
     },
-    async connect(port, baudrate) {
-        ConsoleComponent.logInfo(`[API] Connecting to ${port}@${baudrate}...`);
-        const res = await req(`/connect?port=${port}&baudrate=${baudrate}`, 'POST');
-        if (res.success) {
-            AppState.setConnection(true, port, baudrate);
-        }
-        return res;
+
+    async getStatus() {
+        return await syncStatus();
     },
-    async disconnect() {
-        ConsoleComponent.logInfo(`[API] Disconnecting...`);
-        const res = await req('/disconnect', 'POST');
-        if (res.success) {
-            AppState.setConnection(false);
-        }
+
+    async connect(port, baudrate) {
+        const res = await req(`/connect?port=${port}&baudrate=${baudrate}`, 'POST');
+        await syncStatus();
         return res;
     },
 
-    // 13.2 Programa
+    async disconnect() {
+        const res = await req('/disconnect', 'POST');
+        await syncStatus();
+        return res;
+    },
+
     async validateProgram(asm) {
         return await req('/api/program/validate', 'POST', { asm });
     },
+
     async assembleProgram(asm) {
         return await req('/api/program/assemble', 'POST', { asm });
     },
-    async programFPGA() {
-        AppState.setCpuState('PROGRAMMING');
-        const res = await req('/api/program/load', 'POST');
-        AppState.setCpuState('PROGRAMMED');
+
+    async programFPGA(asm) {
+        const res = await req('/api/program/load', 'POST', { asm });
+        await syncStatus();
         return res;
     },
+
     async clearImem() {
-        return await req('/api/program/clear-imem', 'POST');
+        const res = await req('/api/program/clear-imem', 'POST');
+        await syncStatus();
+        return res;
     },
 
-    // 13.3 Control
     async run() {
-        return await req('/api/control/run', 'POST');
-    },
-    async stop() {
-        return await req('/api/control/stop', 'POST');
-    },
-    async step() {
-        return await req('/api/control/step', 'POST');
+        const res = await req('/api/control/run', 'POST');
+        if (res?.state) AppState.setCpuState(res.state);
+        return res;
     },
 
-    // 13.4 Dumps
+    async stop() {
+        const res = await req('/api/control/stop', 'POST');
+        await syncStatus();
+        return res;
+    },
+
+    async step() {
+        const res = await req('/api/control/step', 'POST');
+        await syncStatus();
+        return res;
+    },
+
     async dumpRegs() {
         return await req('/api/dump/regs', 'POST');
     },
+
     async dumpPipeline() {
         return await req('/api/dump/pipeline', 'POST');
     },
-    async dumpMemory() {
-        return await req('/api/dump/memory', 'POST');
+
+    async dumpMemory(offset = 0) {
+        return await req('/api/dump/memory', 'POST', { offset });
     }
 };
