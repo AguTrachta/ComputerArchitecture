@@ -1,19 +1,68 @@
-from fastapi import APIRouter
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException
+
+from app.core.state import session_state
+from app.models.requests import MemoryDumpRequest
+from app.models.responses import MemoryDumpResponse, PipelineDumpResponse, RegistersDumpResponse
 from app.serial.protocol_manager import protocol_manager
 
 router = APIRouter()
 
-@router.post("/api/dump/regs")
-async def dump_regs():
-    protocol_manager.dump_regs()
-    return {"success": True, "message": "Regs dumped"}
 
-@router.post("/api/dump/pipeline")
-async def dump_pipeline():
-    protocol_manager.dump_pipeline()
-    return {"success": True, "message": "Pipeline dumped"}
+def _require_connection() -> None:
+    if not session_state.connected:
+        raise HTTPException(status_code=409, detail="No hay una FPGA conectada.")
 
-@router.post("/api/dump/memory")
-async def dump_memory():
-    protocol_manager.dump_memory()
-    return {"success": True, "message": "Memory dumped"}
+
+@router.post("/api/dump/regs", response_model=RegistersDumpResponse)
+async def dump_regs() -> RegistersDumpResponse:
+    _require_connection()
+
+    try:
+        frame = await protocol_manager.dump_regs()
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return RegistersDumpResponse(success=True, message="Regs dumped.", state=session_state.state, dump=frame.payload)
+
+
+@router.post("/api/dump/pipeline", response_model=PipelineDumpResponse)
+async def dump_pipeline() -> PipelineDumpResponse:
+    _require_connection()
+
+    try:
+        frame = await protocol_manager.dump_pipeline()
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return PipelineDumpResponse(
+        success=True,
+        message="Pipeline dump received.",
+        state=session_state.state,
+        dump=frame.payload,
+    )
+
+
+@router.post("/api/dump/memory", response_model=MemoryDumpResponse)
+async def dump_memory(req: MemoryDumpRequest | None = None) -> MemoryDumpResponse:
+    _require_connection()
+    request = req or MemoryDumpRequest()
+
+    try:
+        frame = await protocol_manager.dump_memory(request.offset)
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return MemoryDumpResponse(
+        success=True,
+        message="Memory dump received.",
+        state=session_state.state,
+        dump=frame.payload,
+    )

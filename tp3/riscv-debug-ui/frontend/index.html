@@ -18,10 +18,10 @@
             <h1>RISC-V Debug UI</h1>
         </div>
         <div class="status-indicators">
-            <div class="indicator" id="ind-port">COM3</div>
+            <div class="indicator" id="ind-port">N/A</div>
             <div class="indicator" id="ind-baud">9600 baud</div>
-            <div class="indicator badge-success" id="ind-conn">CONNECTED</div>
-            <div class="indicator badge-warning" id="ind-cpu">CPU: IDLE</div>
+            <div class="indicator badge-danger" id="ind-conn">DISCONNECTED</div>
+            <div class="indicator badge-warning" id="ind-cpu">CPU: DISCONNECTED</div>
             <div class="indicator" id="ind-imem">IMEM 1024</div>
         </div>
     </header>
@@ -115,7 +115,7 @@
                     <div class="summary-cards">
                         <div class="card status-card">
                             <h4>CPU State</h4>
-                            <span class="value success-text">IDLE</span>
+                            <span class="value success-text">DISCONNECTED</span>
                         </div>
                         <div class="card status-card">
                             <h4>PC Actual</h4>

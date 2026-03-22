@@ -1,6 +1,3 @@
-/**
- * components/editor.js
- */
 window.EditorComponent = {
     init() {
         this.asmEditor = document.getElementById('asm-editor');
@@ -12,26 +9,45 @@ window.EditorComponent = {
         this.btnValidate.addEventListener('click', async () => {
             const asm = this.asmEditor.value;
             if (!asm.trim()) return;
-            const res = await Api.validateProgram(asm);
-            ConsoleComponent.logInfo(`Programa válido: ${res.instCount} instrucciones.`);
+
+            try {
+                const res = await Api.validateProgram(asm);
+                if (res.errors?.length) {
+                    ConsoleComponent.logError(res.errors.join(' | '));
+                    return;
+                }
+
+                ConsoleComponent.logInfo(
+                    `Programa valido: ${res.inst_count} instrucciones, ${res.imem_usage}/${res.imem_limit} bytes.`
+                );
+
+                if (res.warnings?.length) {
+                    ConsoleComponent.logWarn(res.warnings.join(' | '));
+                }
+            } catch (error) {
+                ConsoleComponent.logError(error.message);
+            }
         });
 
         this.btnTranslate.addEventListener('click', async () => {
             const asm = this.asmEditor.value;
             if (!asm.trim()) return;
-            const res = await Api.assembleProgram(asm);
-            this.hexOutput.textContent = res.hex;
-            this.hexViewer.open = true; // Auto open details
-            ConsoleComponent.logInfo(`Traducido a HEX (${res.hex.split('\n').length} words).`);
+
+            try {
+                const res = await Api.assembleProgram(asm);
+                this.hexOutput.textContent = res.hex;
+                this.hexViewer.open = true;
+                ConsoleComponent.logInfo(`Traducido a HEX (${res.inst_count} words, ${res.imem_usage} bytes).`);
+            } catch (error) {
+                ConsoleComponent.logError(error.message);
+            }
         });
-        
-        // Let's populate some mock ASM
+
         this.asmEditor.value = `main:
-    add x1, x0, 5
-    addi x2, x0, 10
-    jal x3, target
-    nop
-target:
-    sub x4, x2, x1`;
+    addi x1, x0, 5
+    addi x2, x0, 7
+    add x3, x1, x2
+    sub x4, x3, x1
+    halt`;
     }
 };
