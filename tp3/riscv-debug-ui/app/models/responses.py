@@ -10,7 +10,7 @@ class CapabilityFlags(BaseModel):
     can_clear_dmem: bool = False
     can_dump_regs: bool = True
     can_dump_pipeline: bool = True
-    can_dump_pipeline_full_payload: bool = False
+    can_dump_pipeline_full_payload: bool = True
     can_dump_memory: bool = True
     can_dump_memory_full_payload: bool = False
     can_reset_exec_independent: bool = False

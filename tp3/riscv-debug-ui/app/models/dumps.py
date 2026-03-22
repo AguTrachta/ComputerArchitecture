@@ -25,7 +25,9 @@ class RegistersDumpPayload(BaseModel):
 class PipelineDumpPayload(BaseModel):
     valid: bool = False
     source: str = "rtl_placeholder_until_latch_dump"
+    stage_order: list[str] = Field(default_factory=list)
     stages: Dict[str, Dict[str, StageValue]] = Field(default_factory=dict)
+    raw_words: list[str] = Field(default_factory=list)
 
 
 class MemoryDumpRow(BaseModel):

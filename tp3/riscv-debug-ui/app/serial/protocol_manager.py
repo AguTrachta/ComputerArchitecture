@@ -51,6 +51,22 @@ REGISTER_ALIASES = (
     "t6",
 )
 
+ALU_OP_NAMES = {
+    0b100000: "ADD",
+    0b100010: "SUB",
+    0b100100: "AND",
+    0b100101: "OR",
+    0b100110: "XOR",
+    0b000011: "SRA",
+    0b000010: "SRL",
+    0b000001: "SLL",
+    0b101010: "SLT",
+    0b101011: "SLTU",
+    0b001111: "LUI",
+}
+
+PIPELINE_STAGE_ORDER = ("Global", "IF/ID", "ID/EX", "EX/MEM", "MEM/WB")
+
 
 @dataclass(slots=True)
 class ParsedFrame:
@@ -67,6 +83,8 @@ class PendingWaiter:
 
 
 class ProtocolManager:
+    PIPELINE_DUMP_WORD_COUNT = 25
+
     CMD_PROG_BEGIN = 0x10
     CMD_PROG_END = 0x11
     CMD_RUN = 0x20
@@ -258,7 +276,7 @@ class ProtocolManager:
                 return []
 
             if byte_value == self.RESP_DUMP_LATCH:
-                self._parser_state = "dump_pipeline_done"
+                self._parser_state = "dump_pipeline_payload"
                 self._payload = bytearray([byte_value])
                 return []
 
@@ -300,8 +318,14 @@ class ProtocolManager:
             raw_bytes = [f"{byte:02X}" for byte in payload] + [byte_hex]
             return [ParsedFrame(kind="regs_dump", text="RESP_DUMP_REGS", raw_bytes=raw_bytes, payload=registers)]
 
+        if self._parser_state == "dump_pipeline_payload":
+            self._payload.append(byte_value)
+            if len(self._payload) == 1 + (self.PIPELINE_DUMP_WORD_COUNT * 4):
+                self._parser_state = "dump_pipeline_done"
+            return []
+
         if self._parser_state == "dump_pipeline_done":
-            header = bytes(self._payload)
+            payload = bytes(self._payload)
             self._parser_state = "idle"
             self._payload = bytearray()
             if byte_value != self.RESP_DUMP_DONE:
@@ -309,12 +333,19 @@ class ProtocolManager:
                     ParsedFrame(
                         kind="error",
                         text="Trama DUMP_LATCH incompleta: falta RESP_DUMP_DONE.",
-                        raw_bytes=[f"{byte:02X}" for byte in header] + [byte_hex],
+                        raw_bytes=[f"{byte:02X}" for byte in payload] + [byte_hex],
                     )
                 ]
-            payload = self._build_placeholder_pipeline_dump()
-            raw_bytes = [f"{byte:02X}" for byte in header] + [byte_hex]
-            return [ParsedFrame(kind="pipeline_dump", text="RESP_DUMP_LATCH", raw_bytes=raw_bytes, payload=payload)]
+            pipeline_dump = self._decode_pipeline_dump(payload[1:])
+            raw_bytes = [f"{byte:02X}" for byte in payload] + [byte_hex]
+            return [
+                ParsedFrame(
+                    kind="pipeline_dump",
+                    text="RESP_DUMP_LATCH",
+                    raw_bytes=raw_bytes,
+                    payload=pipeline_dump,
+                )
+            ]
 
         if self._parser_state == "dump_memory_done":
             header = bytes(self._payload)
@@ -396,12 +427,6 @@ class ProtocolManager:
         if frame.kind == "pipeline_dump":
             session_state.record_pipeline_dump(frame.payload)
             events.append(build_event("pipeline_dump", frame.payload))
-            events.append(
-                build_event(
-                    "warning",
-                    {"message": "El RTL actual solo devuelve un placeholder para dump_pipeline."},
-                )
-            )
             return events
 
         if frame.kind == "memory_dump":
@@ -449,16 +474,56 @@ class ProtocolManager:
             )
         return RegistersDumpPayload(registers=registers)
 
-    def _build_placeholder_pipeline_dump(self) -> PipelineDumpPayload:
+    def _decode_pipeline_dump(self, payload: bytes) -> PipelineDumpPayload:
+        words = [
+            int.from_bytes(payload[index * 4 : (index + 1) * 4], byteorder="big", signed=False)
+            for index in range(self.PIPELINE_DUMP_WORD_COUNT)
+        ]
+
         return PipelineDumpPayload(
-            valid=False,
+            valid=True,
+            source="rtl_dump_latches",
+            stage_order=list(PIPELINE_STAGE_ORDER),
             stages={
-                "Global": {"status": "placeholder", "reason": "RTL latch dump pendiente"},
-                "IF/ID": {"status": "unavailable"},
-                "ID/EX": {"status": "unavailable"},
-                "EX/MEM": {"status": "unavailable"},
-                "MEM/WB": {"status": "unavailable"},
+                "Global": {
+                    "dump_word_count": self.PIPELINE_DUMP_WORD_COUNT,
+                    "pipeline_stall_or_debug_pause": bool(words[0] & 0x1),
+                    "flush_ifid": bool(words[1] & 0x1),
+                },
+                "IF/ID": {
+                    "pc": self._format_word(words[2]),
+                    "pc_plus4": self._format_word(words[3]),
+                    "instr": self._format_word(words[4]),
+                },
+                "ID/EX": {
+                    "rs1_data": self._format_word(words[5]),
+                    "rs2_data": self._format_word(words[6]),
+                    "imm": self._format_signed_word(words[7]),
+                    "alu_op_code": self._format_word(words[8]),
+                    "alu_op_name": self._decode_alu_op(words[8]),
+                    "reg_write": bool(words[9] & 0x1),
+                    "mem_read": bool(words[10] & 0x1),
+                    "mem_write": bool(words[11] & 0x1),
+                    "mem_to_reg": bool(words[12] & 0x1),
+                    "alu_src": bool(words[13] & 0x1),
+                    "jump": bool(words[14] & 0x1),
+                },
+                "EX/MEM": {
+                    "alu_result": self._format_word(words[15]),
+                    "reg_write": bool(words[16] & 0x1),
+                    "mem_write": bool(words[17] & 0x1),
+                    "mem_to_reg": bool(words[18] & 0x1),
+                    "jump": bool(words[19] & 0x1),
+                },
+                "MEM/WB": {
+                    "rd_idx": words[20] & 0x1F,
+                    "mem_rdata": self._format_word(words[21]),
+                    "reg_write": bool(words[22] & 0x1),
+                    "mem_to_reg": bool(words[23] & 0x1),
+                    "jump": bool(words[24] & 0x1),
+                },
             },
+            raw_words=[self._format_word(word) for word in words],
         )
 
     def _build_placeholder_memory_dump(self, offset: int) -> MemoryDumpPayload:
@@ -473,6 +538,16 @@ class ProtocolManager:
             )
 
         return MemoryDumpPayload(valid=False, rows=rows)
+
+    def _decode_alu_op(self, value: int) -> str:
+        return ALU_OP_NAMES.get(value & 0x3F, f"UNKNOWN_{value & 0x3F:06b}")
+
+    def _format_word(self, value: int) -> str:
+        return f"0x{value:08X}"
+
+    def _format_signed_word(self, value: int) -> str:
+        signed_value = value if value < 0x80000000 else value - 0x100000000
+        return f"0x{value:08X} ({signed_value})"
 
 
 protocol_manager = ProtocolManager()

@@ -65,6 +65,8 @@ async def step_cpu() -> OperationResponse:
         await protocol_manager.send_step()
         if session_state.capabilities.can_dump_regs:
             await protocol_manager.dump_regs()
+        if session_state.capabilities.can_dump_pipeline:
+            await protocol_manager.dump_pipeline()
     except TimeoutError as exc:
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -72,6 +74,6 @@ async def step_cpu() -> OperationResponse:
 
     return OperationResponse(
         success=True,
-        message="Step completed and register dump refreshed.",
+        message="Step completed and observable dumps refreshed.",
         state=session_state.state,
     )
