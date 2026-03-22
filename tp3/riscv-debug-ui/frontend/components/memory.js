@@ -1,39 +1,47 @@
 window.MemoryComponent = {
-    PAGE_SIZE: 32,   // words per page (128 bytes → ~0.13s at 9600 baud)
+    PAGE_SIZE: 32,
     currentPage: 0,
-    totalPages: 32,  // will be updated from server response
+    totalPages: 32,
     loading: false,
 
     init() {
-        this.tableBody   = document.querySelector('#mem-table tbody');
-        this.btnPrev     = document.getElementById('btn-mem-prev');
-        this.btnNext     = document.getElementById('btn-mem-next');
-        this.btnFirst    = document.getElementById('btn-mem-first');
-        this.btnRefresh  = document.getElementById('btn-mem-refresh');
-        this.pageLabel   = document.getElementById('mem-page-label');
+        this.tableBody = document.querySelector('#mem-table tbody');
+        this.btnPrev = document.getElementById('btn-mem-prev');
+        this.btnNext = document.getElementById('btn-mem-next');
+        this.btnFirst = document.getElementById('btn-mem-first');
+        this.btnRefresh = document.getElementById('btn-mem-refresh');
+        this.pageLabel = document.getElementById('mem-page-label');
         this.loadingOverlay = document.getElementById('mem-loading');
-        this.progressText   = document.getElementById('mem-progress-text');
+        this.progressText = document.getElementById('mem-progress-text');
 
         this.btnPrev.addEventListener('click', () => this.goTo(this.currentPage - 1));
         this.btnNext.addEventListener('click', () => this.goTo(this.currentPage + 1));
         this.btnFirst.addEventListener('click', () => this.goTo(0));
         this.btnRefresh.addEventListener('click', () => this.goTo(this.currentPage));
 
+        AppState.subscribe((event) => {
+            if (['connection_changed', 'cpu_state_changed', 'capabilities_changed', 'status_synced'].includes(event)) {
+                this._updateControls();
+            }
+        });
+
         this._renderEmpty();
+        this._updateControls();
     },
 
     async goTo(page) {
-        if (this.loading) return;
+        if (this.loading || !this._canRequestDump()) return;
+
         const target = Math.max(0, Math.min(page, this.totalPages - 1));
 
         this._setLoading(true);
         try {
             const res = await Api.dumpMemory(target, this.PAGE_SIZE);
             if (res?.dump) {
-                this.currentPage = res.page ?? target;
-                this.totalPages  = res.total_pages ?? this.totalPages;
-                this._updateControls();
-                this._renderRows(res.dump.rows);
+                this.updateMemory(res.dump, {
+                    page: res.page ?? target,
+                    totalPages: res.total_pages ?? this.totalPages
+                });
                 ConsoleComponent.logSuccess(`Mem pag. ${this.currentPage + 1}/${this.totalPages} OK`);
             }
         } catch (err) {
@@ -44,9 +52,25 @@ window.MemoryComponent = {
     },
 
     updateFromWsEvent(dump) {
-        // Called from WS mem_dump events (e.g. after a step that triggers auto-dump)
-        // Just re-request current page to keep the UI in sync
-        this.goTo(this.currentPage);
+        this.updateMemory(dump);
+    },
+
+    updateMemory(dump, { page, totalPages } = {}) {
+        if (typeof page === 'number') {
+            this.currentPage = page;
+        }
+        if (typeof totalPages === 'number' && totalPages > 0) {
+            this.totalPages = totalPages;
+        }
+
+        this._updateControls();
+
+        if (dump?.rows?.length) {
+            this._renderRows(dump.rows);
+            return;
+        }
+
+        this._renderEmpty();
     },
 
     _setLoading(on) {
@@ -56,33 +80,41 @@ window.MemoryComponent = {
         }
         if (this.progressText) {
             const bytes = this.PAGE_SIZE * 4;
-            this.progressText.textContent = on
-                ? `Recibiendo ${bytes} bytes…`
-                : '';
+            this.progressText.textContent = on ? `Recibiendo ${bytes} bytes...` : '';
         }
-        [this.btnPrev, this.btnNext, this.btnFirst, this.btnRefresh].forEach(b => {
-            if (b) b.disabled = on;
-        });
+        this._updateControls();
     },
 
     _updateControls() {
+        const canRequestDump = this._canRequestDump();
+
         if (this.pageLabel) {
-            this.pageLabel.textContent = `Pág ${this.currentPage + 1} / ${this.totalPages}`;
+            this.pageLabel.textContent = `Pag ${this.currentPage + 1} / ${this.totalPages}`;
         }
-        if (this.btnPrev)  this.btnPrev.disabled  = (this.currentPage <= 0) || this.loading;
-        if (this.btnNext)  this.btnNext.disabled  = (this.currentPage >= this.totalPages - 1) || this.loading;
-        if (this.btnFirst) this.btnFirst.disabled = (this.currentPage <= 0) || this.loading;
+
+        if (this.btnPrev) this.btnPrev.disabled = !canRequestDump || this.loading || this.currentPage <= 0;
+        if (this.btnNext) this.btnNext.disabled = !canRequestDump || this.loading || this.currentPage >= this.totalPages - 1;
+        if (this.btnFirst) this.btnFirst.disabled = !canRequestDump || this.loading || this.currentPage <= 0;
+        if (this.btnRefresh) this.btnRefresh.disabled = !canRequestDump || this.loading;
+    },
+
+    _canRequestDump() {
+        const connected = Boolean(AppState?.connection?.connected);
+        const canDump = Boolean(AppState?.capabilities?.can_dump_memory);
+        const state = AppState?.cpu?.state || 'DISCONNECTED';
+        return connected && canDump && !['RUNNING', 'PROGRAMMING', 'STEPPING', 'DUMPING'].includes(state);
     },
 
     _renderRows(rows) {
         if (!this.tableBody) return;
+
         this.tableBody.innerHTML = '';
-        (rows || []).forEach(row => {
+        (rows || []).forEach((row) => {
             const vals = Array.isArray(row.values)
                 ? row.values
                 : ['--------', '--------', '--------', '--------'];
 
-            const isNonZero = vals.some(v => v !== '0x00000000' && v !== '--------');
+            const isNonZero = vals.some((value) => value !== '0x00000000' && value !== '--------');
             const tr = document.createElement('tr');
             if (isNonZero) tr.classList.add('mem-row-nonzero');
 
@@ -99,10 +131,11 @@ window.MemoryComponent = {
 
     _renderEmpty() {
         if (!this.tableBody) return;
+
         this.tableBody.innerHTML = `
             <tr class="mem-empty-row">
-                <td colspan="5">Sin datos — presioná ▶ para leer la primera página</td>
+                <td colspan="5">Sin datos - usa los controles de pagina para leer memoria</td>
             </tr>`;
-        if (this.pageLabel) this.pageLabel.textContent = `Pág - / -`;
-    },
+        if (this.pageLabel) this.pageLabel.textContent = 'Pag - / -';
+    }
 };

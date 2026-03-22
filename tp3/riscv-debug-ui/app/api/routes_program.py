@@ -22,6 +22,29 @@ def _require_connection() -> None:
         raise HTTPException(status_code=409, detail="No hay una FPGA conectada.")
 
 
+def _require_program_idle() -> None:
+    if session_state.state in {"PROGRAMMING", "STEPPING", "DUMPING"}:
+        raise HTTPException(status_code=409, detail=f"Hay una operacion en curso ({session_state.state}).")
+
+
+async def _stop_if_running() -> None:
+    if session_state.state != "RUNNING":
+        return
+
+    try:
+        await protocol_manager.send_stop()
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _finish_programming() -> None:
+    if session_state.state == "PROGRAMMING":
+        session_state.state = session_state.idle_state()
+        await publish_event("backend_state", {"state": session_state.state})
+
+
 @router.post("/api/program/validate", response_model=ProgramValidationResponse)
 async def validate_program(req: ProgramTextRequest) -> ProgramValidationResponse:
     try:
@@ -63,6 +86,7 @@ async def assemble_program(req: ProgramTextRequest) -> AssemblyResponse:
 @router.post("/api/program/load", response_model=ProgramLoadResponse)
 async def load_program(req: ProgramTextRequest) -> ProgramLoadResponse:
     _require_connection()
+    _require_program_idle()
 
     try:
         result = assembler.assemble(req.asm)
@@ -78,15 +102,21 @@ async def load_program(req: ProgramTextRequest) -> ProgramLoadResponse:
             detail=f"Program too big: {len(result.words)} words > {session_state.imem_size}.",
         )
 
+    await _stop_if_running()
     session_state.state = "PROGRAMMING"
     await publish_event("backend_state", {"state": session_state.state})
 
     try:
+        await protocol_manager.clear_imem()
+        session_state.state = "PROGRAMMING"
+        await publish_event("backend_state", {"state": session_state.state})
         await protocol_manager.program_words(result.words)
     except TimeoutError as exc:
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        await _finish_programming()
 
     return ProgramLoadResponse(
         success=True,
@@ -99,10 +129,9 @@ async def load_program(req: ProgramTextRequest) -> ProgramLoadResponse:
 @router.post("/api/program/clear-imem", response_model=OperationResponse)
 async def clear_imem() -> OperationResponse:
     _require_connection()
+    _require_program_idle()
 
-    if session_state.state == "RUNNING":
-        raise HTTPException(status_code=409, detail="No se puede limpiar IMEM mientras la CPU esta corriendo.")
-
+    await _stop_if_running()
     session_state.state = "PROGRAMMING"
     await publish_event("backend_state", {"state": session_state.state})
 
@@ -112,5 +141,7 @@ async def clear_imem() -> OperationResponse:
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        await _finish_programming()
 
     return OperationResponse(success=True, message="IMEM cleared.", state=session_state.state)

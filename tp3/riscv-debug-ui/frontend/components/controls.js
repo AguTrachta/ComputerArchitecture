@@ -105,16 +105,8 @@ window.ControlsComponent = {
         });
 
         this.btnDumpMem.addEventListener('click', async () => {
-            const offsetText = document.getElementById('mem-offset').value || '0';
-            const parsedOffset = parseInt(offsetText, 0);
-            const offset = Number.isNaN(parsedOffset) ? 0 : parsedOffset;
-
             try {
-                const res = await Api.dumpMemory(offset);
-                if (res.dump) {
-                    window.MemoryComponent.updateMemory(res.dump);
-                }
-                ConsoleComponent.logInfo(res.message);
+                await window.MemoryComponent.goTo(window.MemoryComponent.currentPage);
             } catch (error) {
                 ConsoleComponent.logError(error.message);
             }
@@ -135,16 +127,17 @@ window.ControlsComponent = {
         const programLoaded = AppState.cpu.programLoaded;
         const capabilities = AppState.capabilities;
         const busy = ['PROGRAMMING', 'STEPPING', 'DUMPING'].includes(state);
+        const running = state === 'RUNNING';
 
         this.btnConnect.disabled = connected;
         this.btnDisconnect.disabled = !connected;
-        this.btnProgram.disabled = !connected || state === 'RUNNING' || busy;
-        this.btnClear.disabled = !connected || state === 'RUNNING' || !capabilities.can_clear_imem || busy;
-        this.btnRun.disabled = !connected || !programLoaded || state === 'RUNNING' || busy;
-        this.btnStop.disabled = state !== 'RUNNING';
-        this.btnStep.disabled = !connected || !programLoaded || state === 'RUNNING' || busy;
-        this.btnDumpRegs.disabled = !connected || !capabilities.can_dump_regs || busy;
-        this.btnDumpPipe.disabled = !connected || !capabilities.can_dump_pipeline || busy;
-        this.btnDumpMem.disabled = !connected || !capabilities.can_dump_memory || busy;
+        this.btnProgram.disabled = !connected || busy;
+        this.btnClear.disabled = !connected || !capabilities.can_clear_imem || busy;
+        this.btnRun.disabled = !connected || !programLoaded || running || busy;
+        this.btnStop.disabled = !running;
+        this.btnStep.disabled = !connected || !programLoaded || running || busy;
+        this.btnDumpRegs.disabled = !connected || !capabilities.can_dump_regs || running || busy;
+        this.btnDumpPipe.disabled = !connected || !capabilities.can_dump_pipeline || running || busy;
+        this.btnDumpMem.disabled = !connected || !capabilities.can_dump_memory || running || busy;
     }
 };
