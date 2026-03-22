@@ -423,6 +423,83 @@ module top #(
     
     
     
+    // ------------------------------------------------------------
+    // Mapeo de señales del pipeline para CMD_DUMP_LATCHES
+    // ------------------------------------------------------------
+    // Cada índice representa una palabra de 32 bits enviada al host.
+    // Señales angostas van extendidas con ceros.
+    //
+    //  0: IF/ID stall   REVISAR
+    //  1: IF/ID flush   REVISAR
+    //  2: IF/ID pc
+    //  3: IF/ID pc+4
+    //  4: IF/ID instr
+    //  5: ID/EX rs1_data
+    //  6: ID/EX rs2_data
+    //  7: ID/EX imm
+    //  8: ID/EX alu_op
+    //  9: ID/EX RegWrite
+    // 10: ID/EX MemRead
+    // 11: ID/EX MemWrite
+    // 12: ID/EX MemToReg
+    // 13: ID/EX ALUSrc
+    // 14: ID/EX Jump
+    // 15: EX/MEM alu_result
+    // 16: EX/MEM reg_write
+    // 17: EX/MEM mem_write
+    // 18: EX/MEM mem_to_reg
+    // 19: EX/MEM jump
+    // 20: MEM/WB rd_idx
+    // 21: MEM/WB mem_rdata
+    // 22: MEM/WB reg_write
+    // 23: MEM/WB mem_to_reg
+    // 24: MEM/WB jump
+    // ------------------------------------------------------------
+    
+    wire [4:0]  dbg_latch_idx;
+    wire [31:0] dbg_latch_data;
+    reg  [31:0] dbg_latch_data_r;
+    
+    assign dbg_latch_data = dbg_latch_data_r;
+
+    always @(*) begin
+        case (dbg_latch_idx)
+            5'd0:  dbg_latch_data_r = {31'd0, (stall_id | ~dbg_pipeline_en)};
+            5'd1:  dbg_latch_data_r = {31'd0, flush_ifid};
+            5'd2:  dbg_latch_data_r = ifid_pc;
+            5'd3:  dbg_latch_data_r = ifid_pc_plus4;
+            5'd4:  dbg_latch_data_r = ifid_instr;
+
+            5'd5:  dbg_latch_data_r = idex_rs1_data;
+            5'd6:  dbg_latch_data_r = idex_rs2_data;
+            5'd7:  dbg_latch_data_r = idex_imm;
+            5'd8:  dbg_latch_data_r = {{(32-NB_OP){1'b0}}, idex_alu_op};
+            5'd9:  dbg_latch_data_r = {31'd0, idex_reg_write};
+            5'd10: dbg_latch_data_r = {31'd0, idex_mem_read};
+            5'd11: dbg_latch_data_r = {31'd0, idex_mem_write};
+            5'd12: dbg_latch_data_r = {31'd0, idex_mem_to_reg};
+            5'd13: dbg_latch_data_r = {31'd0, idex_alu_src};
+            5'd14: dbg_latch_data_r = {31'd0, idex_jump};
+
+            5'd15: dbg_latch_data_r = exmem_alu_result;
+            5'd16: dbg_latch_data_r = {31'd0, exmem_reg_write};
+            5'd17: dbg_latch_data_r = {31'd0, exmem_mem_write};
+            5'd18: dbg_latch_data_r = {31'd0, exmem_mem_to_reg};
+            5'd19: dbg_latch_data_r = {31'd0, exmem_jump};
+
+            5'd20: dbg_latch_data_r = {27'd0, memwb_rd_idx};
+            5'd21: dbg_latch_data_r = memwb_mem_rdata;
+            5'd22: dbg_latch_data_r = {31'd0, memwb_reg_write};
+            5'd23: dbg_latch_data_r = {31'd0, memwb_mem_to_reg};
+            5'd24: dbg_latch_data_r = {31'd0, memwb_jump};
+
+            default: dbg_latch_data_r = 32'd0;
+            
+        endcase
+    end
+    
+    
+    
     /* debug_unit ...
      *
      */
@@ -464,6 +541,10 @@ module top #(
         .o_dbg_mem_dump_en(dbg_mem_dump_en),
         .i_dbg_mem_data(dmem_read_data),
         .o_dbg_mem_idx(dbg_mem_idx),
+        
+        // Latches del pipeline
+        .o_dbg_latch_idx(dbg_latch_idx),
+        .i_dbg_latch_data(dbg_latch_data),
         
         // LEDS
         .o_state_idle(led_state_idle),

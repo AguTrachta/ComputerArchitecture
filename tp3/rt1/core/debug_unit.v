@@ -56,6 +56,10 @@ module debug_unit #(
     output wire [4:0]  o_dbg_reg_idx,
     input  wire [31:0] i_dbg_reg_data,
     
+    // Latches del pipeline (DUMP_LATCHES)
+    output wire [4:0]  o_dbg_latch_idx,
+    input  wire [31:0] i_dbg_latch_data,
+    
     // DMEM utils (DUMP)
     output wire [WORD_AW-1:0]   o_dbg_mem_idx,
     input  wire [31:0]          i_dbg_mem_data,
@@ -116,8 +120,16 @@ module debug_unit #(
             ST_DUMP_MEM_SEND_B2   = 6'd32,
             ST_DUMP_MEM_SEND_B1   = 6'd33,
             ST_DUMP_MEM_SEND_B0   = 6'd34,
-            ST_DUMP_MEM_NEXT      = 6'd35;
+            ST_DUMP_MEM_NEXT      = 6'd35,
     // Subestados --> DUMP LATCHES
+            ST_DUMP_LATCH_HDR     = 6'd36,
+            ST_DUMP_LATCH_SET_IDX = 6'd37,
+            ST_DUMP_LATCH_LATCH   = 6'd38,
+            ST_DUMP_LATCH_SEND_B3 = 6'd39,
+            ST_DUMP_LATCH_SEND_B2 = 6'd40,
+            ST_DUMP_LATCH_SEND_B1 = 6'd41,
+            ST_DUMP_LATCH_SEND_B0 = 6'd42,
+            ST_DUMP_LATCH_NEXT    = 6'd43;
             
     
     // Estados FSM
@@ -162,6 +174,7 @@ module debug_unit #(
         RESP_ERR         = 8'hEE;
     
     localparam IMEM_DEPTH = (1 << IMEM_ADDR_W);
+    localparam LATCH_DUMP_COUNT = 25;
     
     // Registros para comandos
     reg [7:0] cmd_reg, next_cmd_reg;
@@ -178,6 +191,10 @@ module debug_unit #(
     // Registros para ID
     reg [4:0]  dbg_reg_idx_r, next_dbg_reg_idx_r;
     reg [31:0] dbg_reg_data_latched, next_dbg_reg_data_latched;
+    
+    // Registros para DUMP_LATCHES
+    reg [4:0]  dbg_latch_idx_r, next_dbg_latch_idx_r;
+    reg [31:0] dbg_latch_data_latched, next_dbg_latch_data_latched;
     
     
     
@@ -254,6 +271,10 @@ module debug_unit #(
             dbg_reg_idx_r         <= 5'd0;
             dbg_reg_data_latched  <= 32'd0;
             
+            // Para dump latches
+            dbg_latch_idx_r        <= 5'd0;
+            dbg_latch_data_latched <= 32'd0;
+            
             // Para dump memory
             dbg_mem_dump_en_r    <= 1'b0;
             dbg_mem_idx_r        <= 10'd0;
@@ -289,6 +310,10 @@ module debug_unit #(
             // Para ID
             dbg_reg_idx_r         <= next_dbg_reg_idx_r;
             dbg_reg_data_latched  <= next_dbg_reg_data_latched;
+            
+            // Para dump latches
+            dbg_latch_idx_r        <= next_dbg_latch_idx_r;
+            dbg_latch_data_latched <= next_dbg_latch_data_latched;
             
             // Para dump memory:
             dbg_mem_dump_en_r    <= next_dbg_mem_dump_en_r;
@@ -351,6 +376,10 @@ module debug_unit #(
         next_dbg_reg_idx_r        = dbg_reg_idx_r;
         next_dbg_reg_data_latched = dbg_reg_data_latched;
         
+        // Para DUMP_LATCHES
+        next_dbg_latch_idx_r        = dbg_latch_idx_r;
+        next_dbg_latch_data_latched = dbg_latch_data_latched;
+        
         // Data mem dump:
         next_dbg_mem_dump_en_r    = 1'b0;
         next_dbg_mem_idx_r        = dbg_mem_idx_r;
@@ -391,7 +420,7 @@ module debug_unit #(
                     CMD_RUN:          next_state = ST_RUN_CONTINUOUS;
                     CMD_STEP:         next_state = ST_STEP_ARM;
                     CMD_DUMP_REGS:    next_state = ST_DUMP_REGS_HDR; //ST_DUMP_REGS;
-                    //CMD_DUMP_LATCHES: next_state = ST_DUMP_LATCHES;
+                    CMD_DUMP_LATCHES: next_state = ST_DUMP_LATCH_HDR;
                     CMD_DUMP_MEM:     next_state = ST_DUMP_MEM_HDR;
                     CMD_STOP:         next_state = ST_IDLE; // Revisar si conviene aplicar esto solo cuando esté en ST_RUN_CONTINUOUS.
 //                    CMD_STOP: begin
@@ -916,6 +945,97 @@ module debug_unit #(
             end
             
             
+            
+            // ----------------------------------------------------
+            // DUMP LATCHES
+            // ----------------------------------------------------
+
+            ST_DUMP_LATCH_HDR: begin
+                next_pipeline_en_r = 1'b0;
+                next_reset_exec_r  = 1'b0;
+
+                if (!i_tx_full) begin
+                    next_tx_data_r            = RESP_DUMP_LATCH;
+                    next_tx_wr_en_r           = 1'b1;
+                    next_dbg_latch_idx_r      = 5'd0;
+                    next_dbg_latch_data_latched = 32'd0;
+                    next_state                = ST_DUMP_LATCH_SET_IDX;
+                end
+            end
+
+            ST_DUMP_LATCH_SET_IDX: begin
+                next_pipeline_en_r = 1'b0;
+                next_reset_exec_r  = 1'b0;
+
+                next_dbg_latch_idx_r = dbg_latch_idx_r;
+                next_state           = ST_DUMP_LATCH_LATCH;
+            end
+
+            ST_DUMP_LATCH_LATCH: begin
+                next_pipeline_en_r          = 1'b0;
+                next_reset_exec_r           = 1'b0;
+
+                next_dbg_latch_data_latched = i_dbg_latch_data;
+                next_state                  = ST_DUMP_LATCH_SEND_B3;
+            end
+
+            ST_DUMP_LATCH_SEND_B3: begin
+                next_pipeline_en_r = 1'b0;
+                next_reset_exec_r  = 1'b0;
+
+                if (!i_tx_full) begin
+                    next_tx_data_r  = dbg_latch_data_latched[31:24];
+                    next_tx_wr_en_r = 1'b1;
+                    next_state      = ST_DUMP_LATCH_SEND_B2;
+                end
+            end
+
+            ST_DUMP_LATCH_SEND_B2: begin
+                next_pipeline_en_r = 1'b0;
+                next_reset_exec_r  = 1'b0;
+
+                if (!i_tx_full) begin
+                    next_tx_data_r  = dbg_latch_data_latched[23:16];
+                    next_tx_wr_en_r = 1'b1;
+                    next_state      = ST_DUMP_LATCH_SEND_B1;
+                end
+            end
+
+            ST_DUMP_LATCH_SEND_B1: begin
+                next_pipeline_en_r = 1'b0;
+                next_reset_exec_r  = 1'b0;
+
+                if (!i_tx_full) begin
+                    next_tx_data_r  = dbg_latch_data_latched[15:8];
+                    next_tx_wr_en_r = 1'b1;
+                    next_state      = ST_DUMP_LATCH_SEND_B0;
+                end
+            end
+
+            ST_DUMP_LATCH_SEND_B0: begin
+                next_pipeline_en_r = 1'b0;
+                next_reset_exec_r  = 1'b0;
+
+                if (!i_tx_full) begin
+                    next_tx_data_r  = dbg_latch_data_latched[7:0];
+                    next_tx_wr_en_r = 1'b1;
+                    next_state      = ST_DUMP_LATCH_NEXT;
+                end
+            end
+
+            ST_DUMP_LATCH_NEXT: begin
+                next_pipeline_en_r = 1'b0;
+                next_reset_exec_r  = 1'b0;
+
+                if (dbg_latch_idx_r == (LATCH_DUMP_COUNT - 1)) begin
+                    next_state = ST_DUMP_DONE;
+                end else begin
+                    next_dbg_latch_idx_r = dbg_latch_idx_r + 1'b1;
+                    next_state           = ST_DUMP_LATCH_SET_IDX;
+                end
+            end
+            
+            
 
             default: begin
                 next_state = ST_IDLE;
@@ -939,6 +1059,9 @@ module debug_unit #(
     
     // ID
     assign o_dbg_reg_idx = dbg_reg_idx_r;
+    
+    // LATCHES
+    assign o_dbg_latch_idx = dbg_latch_idx_r;
     
     // Data Memory
     assign o_dbg_mem_dump_en = dbg_mem_dump_en_r;
@@ -975,9 +1098,17 @@ module debug_unit #(
        (state == ST_DUMP_MEM_LATCH)    ||
        (state == ST_DUMP_MEM_SEND_B3)  ||
        (state == ST_DUMP_MEM_SEND_B2)  ||
-       (state == ST_DUMP_MEM_SEND_B1)  ||
-       (state == ST_DUMP_MEM_SEND_B0)  ||
-       (state == ST_DUMP_MEM_NEXT)     ||
+       (state == ST_DUMP_MEM_SEND_B1)   ||
+       (state == ST_DUMP_MEM_SEND_B0)   ||
+       (state == ST_DUMP_MEM_NEXT)      ||
+       (state == ST_DUMP_LATCH_HDR)     ||
+       (state == ST_DUMP_LATCH_SET_IDX) ||
+       (state == ST_DUMP_LATCH_LATCH)   ||
+       (state == ST_DUMP_LATCH_SEND_B3) ||
+       (state == ST_DUMP_LATCH_SEND_B2) ||
+       (state == ST_DUMP_LATCH_SEND_B1) ||
+       (state == ST_DUMP_LATCH_SEND_B0) ||
+       (state == ST_DUMP_LATCH_NEXT)    ||
        (state == ST_DUMP_DONE);
     
 endmodule
