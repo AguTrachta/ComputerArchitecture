@@ -23,7 +23,7 @@ Abrir `http://localhost:8080/`.
 - [x] Punto 1: modelado de datos tipado con Pydantic.
 - [x] Punto 2: parser UART RX real alineado con `rt1/core/debug_unit.v`.
 - [x] Punto 3: assembler local RV32I en el backend.
-- [ ] Punto 4: dump real de latches y dump real de memoria pendientes de RTL.
+- [~] Punto 4: dump real de latches completado; dump real de memoria todavia pendiente de RTL.
 
 ## Lo Implementado En Esta Iteracion
 
@@ -75,7 +75,7 @@ ACKs y respuestas parseadas:
 - `C3` stop ok
 - `C4` run end
 - `D0 + 128 bytes + D5` dump de 32 registros
-- `D1 + D5` placeholder de pipeline
+- `D1 + 100 bytes + D5` dump real de 25 words de latches del pipeline
 - `D2 + D5` placeholder de memoria
 
 Detalles relevantes:
@@ -125,12 +125,12 @@ Tambien incluye:
 
 - `POST /api/control/run`: envia `CMD_RUN` y deja el backend en `RUNNING`.
 - `POST /api/control/stop`: espera `RESP_OK_STOP`.
-- `POST /api/control/step`: espera `RESP_OK_STEP` y luego dispara automaticamente `dump_regs`.
+- `POST /api/control/step`: espera `RESP_OK_STEP` y luego dispara automaticamente `dump_regs` y `dump_pipeline`.
 
 ### Dumps
 
 - `POST /api/dump/regs`: espera y devuelve el dump estructurado.
-- `POST /api/dump/pipeline`: devuelve placeholder honesto mientras no exista payload RTL.
+- `POST /api/dump/pipeline`: devuelve el dump real de latches parseado desde `RESP_DUMP_LATCH`.
 - `POST /api/dump/memory`: devuelve placeholder honesto mientras no exista payload RTL.
 
 ### Estado
@@ -151,14 +151,14 @@ Cambios concretos:
   - programa cargado
   - capacidades declaradas
 - consume dumps reales de registros
-- muestra placeholders de pipeline y memoria con `valid: false`
+- consume dump real de pipeline/latches en las etapas `Global`, `IF/ID`, `ID/EX`, `EX/MEM` y `MEM/WB`
+- muestra placeholder de memoria con `valid: false`
 - el editor carga por defecto ASM valido para el assembler implementado
 - la pagina queda fija en viewport y el scroll de la pestaña `Regs` ocurre dentro de su propia tabla
 
 ## Limitaciones Vigentes
 
-- El RTL actual todavia no envia payload real para `dump_pipeline`.
 - El RTL actual todavia no envia payload real para `dump_memory`.
-- Por eso ambos endpoints y la UI estan listos, pero el contenido visible sigue siendo placeholder.
+- El dump de latches ya es real, pero el dump de memoria sigue siendo placeholder.
 
-Cuando exista el latch dump real, la extension esperada es directa: ampliar modelos + parser en `protocol_manager.py` y reutilizar la misma arquitectura REST/WebSocket ya cerrada.
+Cuando exista el dump real de memoria, la extension esperada es directa: ampliar parser + modelo de `MemoryDumpPayload` y reutilizar la misma arquitectura REST/WebSocket ya cerrada.

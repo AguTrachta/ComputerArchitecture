@@ -209,11 +209,11 @@ La arquitectura de software debe distinguir entre:
 * ejecución continua,
 * ejecución paso a paso,
 * stop,
-* dump de registros.
+* dump de registros,
+* dump completo de latches del pipeline.
 
 ### Funcionalidades preparadas en interfaz pero dependientes de RTL
 
-* dump completo de latches del pipeline,
 * dump real de memoria de datos,
 * clear de memoria de datos,
 * reset completo del sistema por comando independiente.
@@ -651,12 +651,16 @@ Cada evento enviado al frontend debería incluir al menos:
   "type": "pipeline_dump",
   "timestamp": "2026-03-20T18:00:04",
   "payload": {
-    "if_id": {},
-    "id_ex": {},
-    "ex_mem": {},
-    "mem_wb": {},
-    "valid": false,
-    "source": "placeholder_until_rtl_ready"
+    "valid": true,
+    "source": "rtl_dump_latches",
+    "stage_order": ["Global", "IF/ID", "ID/EX", "EX/MEM", "MEM/WB"],
+    "stages": {
+      "Global": {"pipeline_stall_or_debug_pause": true, "flush_ifid": false},
+      "IF/ID": {"pc": "0x00000010", "pc_plus4": "0x00000014", "instr": "0x002081B3"},
+      "ID/EX": {"alu_op_name": "ADD", "reg_write": true},
+      "EX/MEM": {"alu_result": "0x00000011"},
+      "MEM/WB": {"rd_idx": 3, "reg_write": true}
+    }
   }
 }
 ```
@@ -826,7 +830,7 @@ El backend debería mantener una estructura de capacidades, por ejemplo:
   "can_clear_dmem": false,
   "can_dump_regs": true,
   "can_dump_pipeline": true,
-  "can_dump_pipeline_full_payload": false,
+  "can_dump_pipeline_full_payload": true,
   "can_dump_memory_full_payload": false,
   "can_reset_exec_independent": false
 }
