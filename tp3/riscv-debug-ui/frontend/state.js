@@ -17,7 +17,7 @@ window.AppState = {
         can_clear_dmem: false,
         can_dump_regs: true,
         can_dump_pipeline: true,
-        can_dump_pipeline_full_payload: false,
+        can_dump_pipeline_full_payload: true,
         can_dump_memory: true,
         can_dump_memory_full_payload: false,
         can_reset_exec_independent: false
