@@ -1185,28 +1185,20 @@ module top #(
 
     // --------------------- MEM --------------------
     
-    // Para cargas, necesitamos extraer el byte/halfword correcto según funct3 y la dirección.
-    reg  [31:0] mem_load_data_r;
+    // Para cargas, extraemos el byte/halfword correcto en la etapa WB
+    // ya que BRAM de 1 ciclo entrega el dato en WB
+    reg  [31:0] formatted_mem_rdata;
+    wire [2:0] memwb_funct3;
 
-    // Estos localparam son para identificar el tipo de carga y hacer la extracción correcta en el bloque always combinacional de MEM.
     localparam [2:0] F3_LB  = 3'b000;
     localparam [2:0] F3_LH  = 3'b001;
     localparam [2:0] F3_LW  = 3'b010;
     localparam [2:0] F3_LBU = 3'b100;
     localparam [2:0] F3_LHU = 3'b101;
 
-    /*
-    * Este bloque combinacional se encarga de tomar el dato leído de memoria (dmem_read_data) y extraer/acomodar el byte o halfword correcto según el tipo de carga (funct3) y la dirección (mem_addr[1:0]).
-     * Para LB/LBU, se selecciona el byte indicado por mem_addr[1:0] y se hace sign-extension o zero-extension según corresponda.
-     * Para LH/LHU, se selecciona el halfword indicado por mem_addr[1:0] (debe ser 00 o 10 para estar alineado) y se hace sign-extension o zero-extension.
-     * Para LW, simplemente se toma el dato completo sin modificaciones.
-     * El resultado final se asigna a mem_load_data_r, que luego se conecta a mem_load_data para ser usado en la etapa de WB.
-     * Esto permite soportar correctamente las instrucciones de carga con diferentes tamaños y alineaciones.
-    */
+    reg [31:0] dmem_read_data_hold; // Mantiene útimo valor
     
-    reg [31:0] dmem_read_data_hold; // Mantiene útimo valor de memoria de datos para no romper nada cuando haga dump
-    
-    assign dmem_read_data_pipe = dbg_mem_dump_en ? dmem_read_data_hold : dmem_read_data; // si estoy dump, retengo ultimo valor, sino funciono normal
+    assign dmem_read_data_pipe = dbg_mem_dump_en ? dmem_read_data_hold : dmem_read_data;
     
     always @(posedge clk) begin
         if (reset) begin
@@ -1217,55 +1209,56 @@ module top #(
     end
     
     always @(*) begin
-        mem_load_data_r = dmem_read_data_pipe; //dmem_read_data;  // default = LW
+        formatted_mem_rdata = dmem_read_data_pipe; // default = LW
 
-        case (exmem_funct3)
+        case (memwb_funct3)
 
-            // LB: se selecciona el byte indicado por mem_addr[1:0] y se hace sign-extension
+            // LB: selecciona el byte indicado y hace sign-extension
             F3_LB: begin
-                case (mem_addr[1:0])
-                    2'b00: mem_load_data_r = {{24{dmem_read_data_pipe[7]}},   dmem_read_data_pipe[7:0]};
-                    2'b01: mem_load_data_r = {{24{dmem_read_data_pipe[15]}},  dmem_read_data_pipe[15:8]};
-                    2'b10: mem_load_data_r = {{24{dmem_read_data_pipe[23]}},  dmem_read_data_pipe[23:16]};
-                    2'b11: mem_load_data_r = {{24{dmem_read_data_pipe[31]}},  dmem_read_data_pipe[31:24]};
+                case (memwb_alu_result[1:0])
+                    2'b00: formatted_mem_rdata = {{24{dmem_read_data_pipe[7]}},   dmem_read_data_pipe[7:0]};
+                    2'b01: formatted_mem_rdata = {{24{dmem_read_data_pipe[15]}},  dmem_read_data_pipe[15:8]};
+                    2'b10: formatted_mem_rdata = {{24{dmem_read_data_pipe[23]}},  dmem_read_data_pipe[23:16]};
+                    2'b11: formatted_mem_rdata = {{24{dmem_read_data_pipe[31]}},  dmem_read_data_pipe[31:24]};
                 endcase
             end
 
-            // LBU: se selecciona el byte indicado por mem_addr[1:0] y se hace zero-extension
+            // LBU: selecciona el byte indicado y hace zero-extension
             F3_LBU: begin
-                case (mem_addr[1:0])
-                    2'b00: mem_load_data_r = {24'b0, dmem_read_data_pipe[7:0]};
-                    2'b01: mem_load_data_r = {24'b0, dmem_read_data_pipe[15:8]};
-                    2'b10: mem_load_data_r = {24'b0, dmem_read_data_pipe[23:16]};
-                    2'b11: mem_load_data_r = {24'b0, dmem_read_data_pipe[31:24]};
+                case (memwb_alu_result[1:0])
+                    2'b00: formatted_mem_rdata = {24'b0, dmem_read_data_pipe[7:0]};
+                    2'b01: formatted_mem_rdata = {24'b0, dmem_read_data_pipe[15:8]};
+                    2'b10: formatted_mem_rdata = {24'b0, dmem_read_data_pipe[23:16]};
+                    2'b11: formatted_mem_rdata = {24'b0, dmem_read_data_pipe[31:24]};
                 endcase
             end
 
-            // LH: se selecciona el halfword indicado por mem_addr[1:0] (00 o 10) y se hace sign-extension
+            // LH: selecciona el halfword indicado y hace sign-extension
             F3_LH: begin
-                case (mem_addr[1:0])
-                    2'b00: mem_load_data_r = {{16{dmem_read_data_pipe[15]}}, dmem_read_data_pipe[15:0]};
-                    2'b10: mem_load_data_r = {{16{dmem_read_data_pipe[31]}}, dmem_read_data_pipe[31:16]};
-                    default: mem_load_data_r = 32'b0; // halfword desalineado
+                case (memwb_alu_result[1:0])
+                    2'b00: formatted_mem_rdata = {{16{dmem_read_data_pipe[15]}}, dmem_read_data_pipe[15:0]};
+                    2'b10: formatted_mem_rdata = {{16{dmem_read_data_pipe[31]}}, dmem_read_data_pipe[31:16]};
+                    default: formatted_mem_rdata = 32'b0; // halfword desalineado
                 endcase
             end
 
-            // LHU: se selecciona el halfword indicado por mem_addr[1:0] (00 o 10) y se hace zero-extension
+            // LHU: selecciona el halfword indicado y hace zero-extension
             F3_LHU: begin
-                case (mem_addr[1:0])
-                    2'b00: mem_load_data_r = {16'b0, dmem_read_data_pipe[15:0]};
-                    2'b10: mem_load_data_r = {16'b0, dmem_read_data_pipe[31:16]};
-                    default: mem_load_data_r = 32'b0;
+                case (memwb_alu_result[1:0])
+                    2'b00: formatted_mem_rdata = {16'b0, dmem_read_data_pipe[15:0]};
+                    2'b10: formatted_mem_rdata = {16'b0, dmem_read_data_pipe[31:16]};
+                    default: formatted_mem_rdata = 32'b0;
                 endcase
             end
 
             default: begin
-                mem_load_data_r = dmem_read_data_pipe; // LW
+                formatted_mem_rdata = dmem_read_data_pipe; // LW
             end
         endcase
     end
 
-    assign mem_load_data = mem_load_data_r;
+    assign memwb_mem_rdata = formatted_mem_rdata;
+    wire [31:0] mem_load_data = 32'b0; // unused
 
 
     wire [31:0] a_addr;
@@ -1307,19 +1300,21 @@ module top #(
         .pc_plus4_in (exmem_pc_plus4),
         .alu_out_in  (exmem_alu_result),
         .rd_in       (exmem_rd_idx),
-        .mem_rdata_in(mem_load_data),
+        .mem_rdata_in(32'b0), // Unused, BRAM already registers read data
         .RegWrite_in (exmem_reg_write),
         .MemToReg_in (exmem_mem_to_reg),
         .Jump_in     (exmem_jump),
+        .funct3_in   (exmem_funct3),
 
         .wb_valid    (memwb_valid),
         .wb_pc_plus4 (memwb_pc_plus4),
         .wb_alu_out  (memwb_alu_result),
         .wb_rd       (memwb_rd_idx),
-        .wb_mem_rdata(memwb_mem_rdata),
+        .wb_mem_rdata(), // Unused, memwb_mem_rdata assigned combinatorially above
         .wb_RegWrite (memwb_reg_write),
         .wb_MemToReg (memwb_mem_to_reg),
-        .wb_Jump     (memwb_jump)
+        .wb_Jump     (memwb_jump),
+        .wb_funct3   (memwb_funct3)
     );
 
     // --------------------- WB ---------------------

@@ -21,6 +21,7 @@ module mem_wb_reg #(
     input  wire         RegWrite_in,
     input  wire         MemToReg_in,
     input  wire         Jump_in,
+    input  wire [2:0]   funct3_in,
     // hacia wb
     output reg          wb_valid,
     output reg  [31:0]  wb_alu_out,
@@ -29,7 +30,8 @@ module mem_wb_reg #(
     output reg  [31:0]  wb_mem_rdata,
     output reg          wb_RegWrite,
     output reg          wb_MemToReg,
-    output reg          wb_Jump
+    output reg          wb_Jump,
+    output reg  [2:0]   wb_funct3
 );
     
     always @(posedge clk) begin
@@ -42,6 +44,7 @@ module mem_wb_reg #(
             wb_MemToReg <= 1'b0;
             wb_pc_plus4 <= 32'b0;
             wb_Jump     <= 1'b0;
+            wb_funct3   <= 3'b000;
         end else if (en) begin
             wb_valid    <= mem_valid_in;
             wb_alu_out  <= alu_out_in;
@@ -51,6 +54,7 @@ module mem_wb_reg #(
             wb_MemToReg <= MemToReg_in;
             wb_pc_plus4 <= pc_plus4_in;
             wb_Jump     <= Jump_in;
+            wb_funct3   <= funct3_in;
         end
     end
     
