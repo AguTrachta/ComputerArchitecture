@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,9 +8,12 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
     <!-- Top Bar -->
     <header class="top-bar glass">
@@ -28,7 +32,7 @@
 
     <!-- Main Layout -->
     <main class="main-layout">
-        
+
         <!-- Column 1: PROGRAMA -->
         <section class="panel glass col-programa">
             <header class="panel-header">
@@ -40,13 +44,14 @@
             </header>
             <div class="panel-content">
                 <div class="editor-container">
-                    <textarea id="asm-editor" class="code-editor" spellcheck="false" placeholder="Escribe código ASM aquí..."></textarea>
+                    <textarea id="asm-editor" class="code-editor" spellcheck="false"
+                        placeholder="Escribe código ASM aquí..."></textarea>
                 </div>
                 <div class="editor-actions">
                     <button id="btn-validate" class="btn primary">Validar</button>
                     <button id="btn-translate" class="btn secondary">Traducir</button>
                 </div>
-                
+
                 <!-- Collapsible HEX -->
                 <details class="hex-viewer" id="hex-viewer">
                     <summary>HEX Generado</summary>
@@ -108,7 +113,7 @@
                 <button class="tab-btn" data-target="tab-mem">Mem</button>
                 <button class="tab-btn" data-target="tab-console">Consola</button>
             </header>
-            
+
             <div class="panel-content tab-contents">
                 <!-- Tab: Resumen -->
                 <div id="tab-resumen" class="tab-pane active">
@@ -157,11 +162,12 @@
                 <div id="tab-mem" class="tab-pane" style="display:none;">
                     <!-- Pagination controls -->
                     <div class="mem-controls">
-                        <button id="btn-mem-first"   class="btn ghost small" title="Primera página">⏮</button>
-                        <button id="btn-mem-prev"    class="btn ghost small" title="Página anterior">◀</button>
-                        <span   id="mem-page-label"  class="mem-page-label">Pág - / -</span>
-                        <button id="btn-mem-next"    class="btn ghost small" title="Siguiente página">▶</button>
-                        <button id="btn-mem-refresh" class="btn secondary small" title="Refrescar página actual">↺</button>
+                        <button id="btn-mem-first" class="btn ghost small" title="Primera página">⏮</button>
+                        <button id="btn-mem-prev" class="btn ghost small" title="Página anterior">◀</button>
+                        <span id="mem-page-label" class="mem-page-label">Pág - / -</span>
+                        <button id="btn-mem-next" class="btn ghost small" title="Siguiente página">▶</button>
+                        <button id="btn-mem-refresh" class="btn secondary small"
+                            title="Refrescar página actual">↺</button>
                     </div>
 
                     <!-- Table with loading overlay wrapper -->
@@ -175,7 +181,13 @@
                         <div class="table-container">
                             <table id="mem-table" class="data-table code-table">
                                 <thead>
-                                    <tr><th>Addr</th><th>+0</th><th>+4</th><th>+8</th><th>+C</th></tr>
+                                    <tr>
+                                        <th>Addr</th>
+                                        <th>+0</th>
+                                        <th>+4</th>
+                                        <th>+8</th>
+                                        <th>+C</th>
+                                    </tr>
                                 </thead>
                                 <tbody>
                                     <!-- Populate via JS -->
@@ -212,4 +224,5 @@
     <script src="components/console.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>
