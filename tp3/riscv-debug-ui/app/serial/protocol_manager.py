@@ -65,7 +65,7 @@ ALU_OP_NAMES = {
     0b001111: "LUI",
 }
 
-PIPELINE_STAGE_ORDER = ("Global", "IF/ID", "ID/EX", "EX/MEM", "MEM/WB")
+PIPELINE_STAGE_ORDER = ("Global", "IF/ID", "ID/EX", "EX/MEM", "MEM/WB", "Forwarding", "WB (Commit)")
 
 
 @dataclass(slots=True)
@@ -83,7 +83,7 @@ class PendingWaiter:
 
 
 class ProtocolManager:
-    PIPELINE_DUMP_WORD_COUNT = 25
+    PIPELINE_DUMP_WORD_COUNT = 30
     MEMORY_DUMP_WORD_COUNT = 1024
     MEMORY_ROWS_PER_RESPONSE = 8
 
@@ -263,6 +263,8 @@ class ProtocolManager:
                 return await asyncio.wait_for(waiter.future, timeout=timeout)
             except asyncio.TimeoutError as exc:
                 self._remove_waiter(waiter)
+                self._parser_state = "idle"
+                self._payload.clear()
                 session_state.mark_error(
                     "UART_TIMEOUT",
                     f"No se recibio la respuesta esperada para {text} dentro de {timeout:.2f} segundos.",
@@ -517,6 +519,14 @@ class ProtocolManager:
                     "dump_word_count": self.PIPELINE_DUMP_WORD_COUNT,
                     "pipeline_stall_or_debug_pause": bool(words[0] & 0x1),
                     "flush_ifid": bool(words[1] & 0x1),
+                    "load_use_hazard": bool(words[25] & (1 << 0)),
+                    "branch_dep_ex_hazard": bool(words[25] & (1 << 1)),
+                    "branch_dep_memload_hazard": bool(words[25] & (1 << 2)),
+                    "jalr_dep_ex_hazard": bool(words[25] & (1 << 3)),
+                    "jalr_dep_memload_hazard": bool(words[25] & (1 << 4)),
+                    "branch_taken": bool(words[25] & (1 << 5)),
+                    "jump_taken": bool(words[25] & (1 << 6)),
+                    "flush_idex_hazard": bool(words[25] & (1 << 7)),
                 },
                 "IF/ID": {
                     "pc": self._format_word(words[2]),
@@ -549,6 +559,22 @@ class ProtocolManager:
                     "reg_write": bool(words[22] & 0x1),
                     "mem_to_reg": bool(words[23] & 0x1),
                     "jump": bool(words[24] & 0x1),
+                },
+                "Forwarding": {
+                    "forward_a_sel": words[26] & 0x03,
+                    "forward_b_sel": (words[26] >> 2) & 0x03,
+                    "branch_fwd_a_exmem": bool(words[26] & (1 << 4)),
+                    "branch_fwd_a_memwb": bool(words[26] & (1 << 5)),
+                    "branch_fwd_b_exmem": bool(words[26] & (1 << 6)),
+                    "branch_fwd_b_memwb": bool(words[26] & (1 << 7)),
+                    "jalr_base_fwd_exmem": bool(words[26] & (1 << 8)),
+                    "jalr_base_fwd_memwb": bool(words[26] & (1 << 9)),
+                },
+                "WB (Commit)": {
+                    "memwb_valid": bool(words[27] & 0x01),
+                    "wb_we": bool(words[27] & 0x02),
+                    "committed_pc": self._format_word((words[28] - 4) & 0xFFFFFFFF) if (words[27] & 0x01) else "0x00000000",
+                    "committed_data": self._format_word(words[29]),
                 },
             },
             raw_words=[self._format_word(word) for word in words],
