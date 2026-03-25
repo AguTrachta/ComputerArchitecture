@@ -179,7 +179,7 @@ module debug_unit #(
         RESP_ERR         = 8'hEE;
     
     localparam IMEM_DEPTH = (1 << IMEM_ADDR_W);
-    localparam LATCH_DUMP_COUNT = 25;
+    localparam LATCH_DUMP_COUNT = 30;
     
     // Registros para comandos
     reg [7:0] cmd_reg, next_cmd_reg;

@@ -144,7 +144,14 @@ module hazard_unit(
     // Salidas
     output wire       stall_if,
     output wire       stall_id,
-    output wire       flush_idex
+    output wire       flush_idex,
+    
+    // Debug variables exportadas
+    output wire       load_use_hazard_out,
+    output wire       branch_dep_ex_hazard_out,
+    output wire       branch_dep_memload_hazard_out,
+    output wire       jalr_dep_ex_hazard_out,
+    output wire       jalr_dep_memload_hazard_out
 );
 
     wire match_idex_rs1, match_idex_rs2;
@@ -156,6 +163,12 @@ module hazard_unit(
     wire jalr_dep_ex_hazard;
     wire jalr_dep_memload_hazard;
     wire hazard_any;
+
+    assign load_use_hazard_out = load_use_hazard;
+    assign branch_dep_ex_hazard_out = branch_dep_ex_hazard;
+    assign branch_dep_memload_hazard_out = branch_dep_memload_hazard;
+    assign jalr_dep_ex_hazard_out = jalr_dep_ex_hazard;
+    assign jalr_dep_memload_hazard_out = jalr_dep_memload_hazard;
 
     assign match_idex_rs1  = (idex_rd  != 5'd0) && (idex_rd  == ifid_rs1);
     assign match_idex_rs2  = (idex_rd  != 5'd0) && (idex_rd  == ifid_rs2);

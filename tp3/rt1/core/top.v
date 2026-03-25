@@ -103,6 +103,12 @@ module top #(
     wire flush_ifid; // para IF/ID register
     wire flush_idex_hazard; // para ID/EX register (flush por hazard, no por control)
     wire flush_idex; // para ID/EX register (flush general, por control o hazard)
+    
+    wire load_use_hazard;
+    wire branch_dep_ex_hazard;
+    wire branch_dep_memload_hazard;
+    wire jalr_dep_ex_hazard;
+    wire jalr_dep_memload_hazard;
 
     // Branch compare / target en ID
     wire [31:0] branch_cmp_a; // rs1_data ya forwardeado hacia el comparador de branch en ID
@@ -454,6 +460,11 @@ module top #(
     // 22: MEM/WB reg_write
     // 23: MEM/WB mem_to_reg
     // 24: MEM/WB jump
+    // 25: Hazards y Branches
+    // 26: Forwarding
+    // 27: WB Control
+    // 28: WB pc_plus4
+    // 29: WB write_data
     // ------------------------------------------------------------
     
     wire [4:0]  dbg_latch_idx;
@@ -492,6 +503,34 @@ module top #(
             5'd22: dbg_latch_data_r = {31'd0, memwb_reg_write};
             5'd23: dbg_latch_data_r = {31'd0, memwb_mem_to_reg};
             5'd24: dbg_latch_data_r = {31'd0, memwb_jump};
+
+            5'd25: dbg_latch_data_r = {
+                24'd0,
+                flush_idex_hazard,
+                jump_taken_id,
+                branch_taken_id,
+                jalr_dep_memload_hazard,
+                jalr_dep_ex_hazard,
+                branch_dep_memload_hazard,
+                branch_dep_ex_hazard,
+                load_use_hazard
+            };
+            
+            5'd26: dbg_latch_data_r = {
+                22'd0,
+                jalr_base_fwd_memwb,
+                jalr_base_fwd_exmem,
+                branch_fwd_b_memwb,
+                branch_fwd_b_exmem,
+                branch_fwd_a_memwb,
+                branch_fwd_a_exmem,
+                forward_b_sel,
+                forward_a_sel
+            };
+            
+            5'd27: dbg_latch_data_r = {30'd0, wb_we, memwb_valid};
+            5'd28: dbg_latch_data_r = memwb_pc_plus4;
+            5'd29: dbg_latch_data_r = wb_write_data;
 
             default: dbg_latch_data_r = 32'd0;
             
@@ -701,7 +740,13 @@ module top #(
 
         .stall_if       (stall_if),
         .stall_id       (stall_id),
-        .flush_idex     (flush_idex_hazard)
+        .flush_idex     (flush_idex_hazard),
+        
+        .load_use_hazard_out           (load_use_hazard),
+        .branch_dep_ex_hazard_out      (branch_dep_ex_hazard),
+        .branch_dep_memload_hazard_out (branch_dep_memload_hazard),
+        .jalr_dep_ex_hazard_out        (jalr_dep_ex_hazard),
+        .jalr_dep_memload_hazard_out   (jalr_dep_memload_hazard)
     );
 
     // ------------------------------------------------------------
