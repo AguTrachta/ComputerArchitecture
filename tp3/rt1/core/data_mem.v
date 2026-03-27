@@ -19,7 +19,7 @@ module data_mem #(
     input  wire        we,
     input  wire [3:0]  byte_en,
     output wire [31:0] rdata,
-    output wire        busy_clear
+    output wire        busy_clear // Podríamos ver de implementarla con rsta_busy si algo no funciona bien con los tiempos de R o W
     
     // Se usa un mux para seleccionar si el control es desde el pipeline o de la debug unit
     //input  wire [WORD_AW-1:0]   i_dbg_mem_idx, // Dirección de memoria a leer
@@ -89,7 +89,7 @@ module data_mem #(
 */ // BLOQUE ORIGINAL END
 
     // Dirección por palabra --> 10 bits
-    wire [WORD_AW-1:0] word_addr = addr[WORD_AW+1:2];
+    //wire [WORD_AW-1:0] word_addr = addr[WORD_AW+1:2];
     wire [1:0]         byte_offset  = addr[1:0];
     wire               aligned_word = (byte_offset == 2'b00);
     
@@ -126,10 +126,11 @@ module data_mem #(
         .wea    (wea_i),
         .addra  (addr),
         .dina   (wdata),
-        .douta  (douta)
+        .douta  (douta),
+        .rsta_busy() // Podríamos ver de implementarla si algo no funciona bien con los tiempos de R o W
     );
     
     assign rdata      = access_ok_r ? douta : 32'h0000_0000;
-    assign busy_clear = 1'b0;
+    assign busy_clear = 1'b0; // Podríamos ver de implementarla con rsta_busy si algo no funciona bien con los tiempos de R o W
     
 endmodule

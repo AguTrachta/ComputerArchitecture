@@ -24,7 +24,7 @@ module top #(
     parameter DMEM_BYTES = 4096,
     parameter ADDR_W = 10,  // 2^10 words = 1024 instrucciones --> instr_mem
     //parameter CLK_FREQ  = 100_000_000, // System Clock --> Revisar si UART falla
-    parameter CLK_FREQ  = 90_000_000, // System Clock --> Revisar si UART falla
+    parameter CLK_FREQ  = 85_000_000, // System Clock --> Revisar si UART falla
     parameter BAUD_RATE = 9600, // --> UART baud rate
     parameter UART_BITS = 8,
     parameter FIFO_SIZE = 16,
@@ -182,7 +182,7 @@ module top #(
     
     // MEM helpers para C2 / C3
     wire [31:0] mem_write_data;
-    wire [31:0] mem_load_data;
+    //wire [31:0] mem_load_data;
 
     // MEM/WB register outputs
     wire memwb_valid;
@@ -1303,7 +1303,7 @@ module top #(
     end
 
     assign memwb_mem_rdata = formatted_mem_rdata;
-    wire [31:0] mem_load_data = 32'b0; // unused
+    //wire [31:0] mem_load_data = 32'b0; // unused
 
 
     wire [31:0] a_addr;
@@ -1329,7 +1329,8 @@ module top #(
         .wdata   (mem_write_data),
         .we      (a_we),
         .byte_en (a_byte_en),
-        .rdata   (dmem_read_data)
+        .rdata   (dmem_read_data),
+        .busy_clear () // Podríamos ver de implementarla con rsta_busy si algo no funciona bien con los tiempos de R o W
     );
 
     // ----------------- MEM/WB reg ------------------
