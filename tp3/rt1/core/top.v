@@ -372,6 +372,7 @@ module top #(
 
     // WB hacia el regfile
     wire        dbg_pipeline_en;
+    wire        dbg_halt_drain;
     //assign wb_we     = memwb_reg_write & memwb_valid;
     //assign wb_we = memwb_reg_write & memwb_valid & dbg_pipeline_en;
     assign wb_we = memwb_reg_write & memwb_valid & dbg_pipeline_en & (memwb_rd_idx != 5'd0);
@@ -397,6 +398,8 @@ module top #(
     wire        dbg_prog_we;
     wire [31:0] dbg_prog_addr;
     wire [31:0] dbg_prog_wdata;
+    wire        pipeline_empty;
+    wire        halt_kill;
     
     //wire        cpu_end;
     //assign cpu_end = ifid_valid && (ifid_instr == 32'hffffffff); // HALT
@@ -556,6 +559,8 @@ module top #(
         .o_reset_exec(dbg_reset_exec),
         //.i_cpu_end(cpu_end),   // Intento de HALT
         .i_halt(id_halt),
+        .i_pipeline_empty(pipeline_empty),
+        .o_halt_drain(dbg_halt_drain),
         
         // Programación IMEM
         .o_prog_we(dbg_prog_we),
@@ -689,7 +694,7 @@ module top #(
         .clk(clk),
         .reset(cpu_reset),
         //.pc_write_en(~stall_if),
-        .pc_write_en((~stall_if) & dbg_pipeline_en),
+        .pc_write_en((~stall_if) & dbg_pipeline_en & ~halt_kill),
         // .flush(1'b0),  // no usamos flush interno de IF por ahora    // WARNING LINTER: not used
         .pc_next_external(redirect_target_id),
         .pc_sel_external(redirect_taken_id),
@@ -802,7 +807,7 @@ module top #(
         //.id_pc(ifid_pc),          // WARNING LINTER: not used
         .id_pc_plus4(ifid_pc_plus4),
         .id_instr(ifid_instr),
-        //.id_valid(ifid_valid),    // WARNING LINTER: not used
+        .id_valid(ifid_valid),
 
         .wb_we(wb_we),
         .wb_rd(wb_rd_idx),
@@ -1157,10 +1162,13 @@ module top #(
     assign redirect_target_id =
         jump_taken_id ? jump_target_id : branch_target_id;
 
+    assign pipeline_empty = ~(ifid_valid | idex_valid | exmem_valid | memwb_valid);
+    assign halt_kill = (dbg_pipeline_en & id_halt) | dbg_halt_drain;
+
     //assign flush_ifid = redirect_taken_id;
     //assign flush_idex = flush_idex_hazard | branch_taken_id;
-    assign flush_ifid = dbg_pipeline_en & redirect_taken_id;
-    assign flush_idex = dbg_pipeline_en & (flush_idex_hazard | branch_taken_id);
+    assign flush_ifid = (dbg_pipeline_en & redirect_taken_id) | halt_kill;
+    assign flush_idex = (dbg_pipeline_en & (flush_idex_hazard | branch_taken_id)) | halt_kill;
 
     ex_stage #(
         .NB_OP(NB_OP)

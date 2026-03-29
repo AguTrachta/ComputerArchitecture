@@ -36,6 +36,8 @@ module debug_unit #(
     output wire o_reset_exec, // Reset del pipeline
     //input  wire i_cpu_end, // atarlo a 1'b0 por ahora
     input  wire i_halt,
+    input  wire i_pipeline_empty,
+    output wire o_halt_drain,
     
     // Control Instruction Memory
     output wire        o_prog_we, // Write Enable de la memoria
@@ -140,7 +142,6 @@ module debug_unit #(
     // Estados FSM
     reg [5:0] state, next_state;
     reg [1:0] reset_exec_cnt, next_reset_exec_cnt;
-    reg [1:0] drain_cnt, next_drain_cnt;
     
     
     // ============================================================
@@ -274,7 +275,6 @@ module debug_unit #(
             rx_pop_pending     <= 1'b0;
             
             reset_exec_cnt     <= 2'd0;
-            drain_cnt          <= 2'd0;
             
             // Para ID
             dbg_reg_idx_r         <= 5'd0;
@@ -317,7 +317,6 @@ module debug_unit #(
             tx_wr_en_r         <= next_tx_wr_en_r;
             
             reset_exec_cnt     <= next_reset_exec_cnt;
-            drain_cnt           <= next_drain_cnt;
             
             // Para ID
             dbg_reg_idx_r         <= next_dbg_reg_idx_r;
@@ -385,7 +384,6 @@ module debug_unit #(
         next_rx_consume      = 1'b0;
         
         next_reset_exec_cnt    = reset_exec_cnt;
-        next_drain_cnt         = drain_cnt;
         
         // Para ID
         next_dbg_reg_idx_r        = dbg_reg_idx_r;
@@ -617,9 +615,7 @@ module debug_unit #(
                 // Si HALT fue detectado en ID, dejamos de fetchear nuevas
                 // instrucciones y pasamos a drenar el pipeline.
                 if (i_halt) begin
-                    //next_pipeline_en_r = 1'b0;
                     next_pipeline_en_r = 1'b1;
-                    next_drain_cnt     = 2'd0;
                     next_state         = ST_DRAIN;
 
                 end else if (rx_byte_valid) begin
@@ -647,11 +643,18 @@ module debug_unit #(
             end
 
             ST_STEP_EXEC: begin
-                next_pipeline_en_r = 1'b0;
-                if (!i_tx_full) begin
-                    next_tx_data_r  = RESP_OK_STEP;
-                    next_tx_wr_en_r = 1'b1;
-                    next_state      = ST_IDLE;
+                next_reset_exec_r = 1'b0;
+
+                if (i_halt) begin
+                    next_pipeline_en_r = 1'b1;
+                    next_state         = ST_DRAIN;
+                end else begin
+                    next_pipeline_en_r = 1'b0;
+                    if (!i_tx_full) begin
+                        next_tx_data_r  = RESP_OK_STEP;
+                        next_tx_wr_en_r = 1'b1;
+                        next_state      = ST_IDLE;
+                    end
                 end
             end
             
@@ -679,21 +682,13 @@ module debug_unit #(
                 // pero sí dejar avanzar lo que ya estaba en el pipeline.
                 next_pipeline_en_r = 1'b1;
 
-                // Esperamos 3 ciclos:
-                // 0 -> 1
-                // 1 -> 2
-                // 2 -> terminar
-                if (drain_cnt == 2'd2) begin
-                //if (drain_cnt == 2'd3) begin
-                    next_pipeline_en_r = 1'b0;
+                if (i_pipeline_empty) begin
                     if (!i_tx_full) begin
                         next_tx_data_r  = RESP_OK_RUN_END;
                         next_tx_wr_en_r = 1'b1;
-                        next_drain_cnt  = 2'd0;
+                        next_pipeline_en_r = 1'b0;
                         next_state      = ST_IDLE;
                     end
-                end else begin
-                    next_drain_cnt = drain_cnt + 1'b1;
                 end
             end
             
@@ -1121,6 +1116,7 @@ module debug_unit #(
     
     assign o_pipeline_en = pipeline_en_r;
     assign o_reset_exec  = reset_exec_r;
+    assign o_halt_drain  = (state == ST_DRAIN);
 
     assign o_prog_we     = prog_we_r;
     assign o_prog_addr   = prog_addr_r;

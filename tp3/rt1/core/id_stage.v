@@ -8,8 +8,9 @@ INSTRUCTION DECODE (ID STAGE)
 - Calcula el código de operación de la ALU (alu_op) usando rv_decoder.
 - Entrega todo el bundle listo para el registro ID/EX.
 
-Por ahora, stall_id / flush_idex / id_valid no se usan adentro
+Por ahora, stall_id / flush_idex no se usan adentro
 de este módulo: se aplican en el registro ID/EX.
+id_valid solo se usa para detectar HALT sobre instrucciones válidas.
 */
 
 module id_stage #(
@@ -25,7 +26,7 @@ module id_stage #(
     // input  wire [31:0]  id_pc,       // WARNING LINTER: not used
     input  wire [31:0]  id_pc_plus4,
     input  wire [31:0]  id_instr,
-    // input  wire         id_valid, // REVISAR uso: puede ser entrada representa burbuja/NOP lógico/flush  // WARNING LINTER: not used
+    input  wire         id_valid,
     
     // Interfaz de write-back hacia el register file
     input  wire         wb_we,
@@ -182,8 +183,7 @@ module id_stage #(
 
     assign idex_funct3 = id_instr[14:12];
     
-    // Se detecta HALT en ID, levanto la flag para la debug unit
-    //assign id_halt        = id_valid && (id_instr == 32'hffff_ffff);
-    assign id_halt        = id_instr == 32'hffff_ffff; // Custom funcion HALT FFFF
+    // Se detecta HALT solo si la instrucción en ID es válida.
+    assign id_halt        = id_valid && (id_instr == 32'hffff_ffff);
 
 endmodule
