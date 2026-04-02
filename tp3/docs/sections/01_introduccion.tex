@@ -1,0 +1,23 @@
+\section{Introducción}
+
+\section{Introducción}
+
+\subsection{Objetivos del Trabajo Práctico}
+
+El objetivo de este trabajo práctico es diseñar, implementar y validar un procesador \textit{RISC-V} segmentado de cinco etapas sobre FPGA, incorporando además una interfaz de depuración y control externo mediante comunicación UART. 
+
+En primer lugar, se pretende construir un \textit{pipeline} funcional capaz de ejecutar un subconjunto de instrucciones de la arquitectura RISC-V, asegurando el correcto transporte de datos y señales de control entre las distintas etapas. Esto implica no solo el diseño del camino de datos y la unidad de control, sino también la resolución de conflictos asociados a dependencias de datos, riesgos de control y sincronización entre etapas.
+
+En segundo lugar, el trabajo busca dotar al sistema de mecanismos de observabilidad y depuración que permitan inspeccionar su estado interno durante la ejecución. Para ello, se incorpora una \textit{Debug Unit} capaz de interactuar con el procesador mediante comandos enviados por UART, posibilitando tareas como la carga de programas en memoria, la ejecución paso a paso, la detención controlada, y el volcado de registros, memoria y latches del pipeline.
+
+Finalmente, se busca validar el funcionamiento integral del sistema tanto en simulación como en FPGA, verificando que la ejecución de programas, el manejo de instrucciones especiales como \texttt{HALT}, y la interacción con la unidad de depuración se comporten de acuerdo con lo esperado. De esta forma, el trabajo no solo apunta a obtener un diseño funcional, sino también a comprender en profundidad la dinámica interna de un procesador segmentado y las herramientas necesarias para analizarlo y depurarlo.
+
+\subsection{Descripción General del Sistema}
+
+El sistema desarrollado consiste en un procesador basado en la arquitectura RISC-V de 32 bits, implementado como un \textit{pipeline} de cinco etapas clásicas: \textit{Instruction Fetch} (IF), \textit{Instruction Decode} (ID), \textit{Execute} (EX), \textit{Memory Access} (MEM) y \textit{Write Back} (WB). Cada etapa cumple una función específica dentro del ciclo de ejecución de instrucciones y se encuentra separada por registros intermedios que almacenan tanto datos como señales de control.
+
+El procesador cuenta con memorias de instrucciones y datos, un banco de registros, lógica de forwarding y detección de hazards, y soporte para instrucciones aritméticas, lógicas, de acceso a memoria y de control de flujo dentro del subconjunto implementado. Además, incorpora señales de validez en los registros del pipeline, lo que permite distinguir entre instrucciones reales y burbujas introducidas por stalls o flushes, facilitando así un control más preciso de la ejecución.
+
+Para permitir la interacción externa con el sistema, se utiliza una interfaz UART como canal de comunicación serie entre la FPGA y una computadora. A través de este enlace es posible enviar comandos y recibir respuestas desde un software de apoyo o una interfaz de usuario, sin necesidad de modificar directamente el hardware en cada prueba.
+
+Sobre esta interfaz se apoya la \textit{Debug Unit}, módulo encargado de coordinar la programación de la memoria de instrucciones, el control de ejecución del procesador y la recolección de información interna del sistema. Esta unidad interpreta los comandos recibidos por UART y genera las señales necesarias para iniciar o detener la ejecución, avanzar un ciclo, reiniciar el procesador o extraer información de depuración. Gracias a esta integración, el sistema no solo ejecuta programas, sino que también puede ser observado y analizado de manera detallada, lo cual resulta especialmente útil durante las etapas de prueba, validación y demostración del funcionamiento del procesador.

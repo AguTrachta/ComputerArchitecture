@@ -1,0 +1,28 @@
+\section{Síntesis y Análisis de Temporización (Timing)}
+
+\subsection{Reportes de Vivado}
+Una vez validado el diseño a nivel funcional mediante simulación, se procedió a su síntesis e implementación en Vivado con el objetivo de evaluar el costo en recursos y su comportamiento temporal sobre FPGA. Los reportes generados por la herramienta permitieron analizar la utilización de LUTs, registros, memoria embebida y rutas críticas, así como también verificar si el sistema cumplía con las restricciones de reloj planteadas.
+
+Este análisis no solo permitió comprobar que el diseño era sintetizable, sino también detectar puntos sensibles en la implementación. En particular, fue importante estudiar cómo impactaban sobre el timing la interconexión entre etapas del pipeline, la lógica de forwarding, la unidad de hazards y el acceso a memorias. También se revisaron advertencias metodológicas y de temporización que surgieron durante el flujo de implementación, ya que varias de ellas ayudaron a identificar zonas del diseño que requerían una revisión más cuidadosa.
+
+Otro aspecto que debió considerarse fue la correspondencia entre la memoria inferida o instanciada y la latencia asumida por el pipeline. Durante el desarrollo, una de las dificultades más importantes estuvo asociada justamente a la lectura de memoria de datos, ya que una discrepancia entre la latencia esperada y la configurada en el bloque de memoria podía desplazar los datos un ciclo completo y producir resultados incorrectos en la etapa de escritura.
+
+\subsection{Identificación del Camino Crítico y Skew}
+En una arquitectura segmentada, el objetivo principal del pipeline es aumentar el rendimiento permitiendo que varias instrucciones avancen en paralelo. Sin embargo, el período mínimo de reloj sigue estando condicionado por el camino combinacional más largo del diseño, es decir, por el llamado \textit{camino crítico}.
+
+En este trabajo, el camino crítico se encontró asociado a la interconexión entre registros del pipeline y lógica de procesamiento involucrada en la ejecución de instrucciones, particularmente en los recorridos que incluyen cálculo de resultados, selección de datos mediante multiplexores y escritura posterior en registros. Según la configuración sintetizada, estos caminos pueden involucrar la salida de memoria, los registros intermedios del pipeline, la lógica de selección del dato de escritura y su retorno hacia el banco de registros.
+
+Este resultado es coherente con la experiencia de desarrollo, ya que una parte importante de la depuración se centró precisamente en comprender cómo se propagaban los datos entre etapas y en qué ciclo exacto quedaban disponibles. La interacción entre memorias, registros de pipeline y lógica de selección resultó ser un punto especialmente sensible, tanto desde lo funcional como desde lo temporal.
+
+Junto con el camino crítico, también resulta relevante considerar el \textit{clock skew}, es decir, la diferencia de tiempo con la que el flanco de reloj llega a distintos registros del circuito. Aunque este efecto forma parte normal de cualquier implementación física, su influencia se vuelve más importante a medida que se exige una frecuencia de operación mayor.
+
+Si el margen temporal disponible es demasiado reducido, el skew puede contribuir a violaciones de \textit{setup time}, impidiendo que una señal llegue y se estabilice correctamente antes del siguiente flanco de reloj. Por eso, no alcanza con que la lógica sea funcionalmente correcta: también debe cumplir con las restricciones temporales impuestas por la tecnología y el ruteo físico sobre FPGA.
+
+\subsection{Determinación de la Frecuencia Óptima}
+A partir de los resultados de síntesis e implementación, se buscó determinar una frecuencia de operación que ofreciera un equilibrio entre rendimiento y robustez temporal. Para ello, se analizaron los valores de \textit{slack} obtenidos en los reportes de timing, procurando mantener un margen positivo que garantizara un funcionamiento confiable del procesador.
+
+Durante el desarrollo, se trabajó principalmente con relojes del orden de decenas de MHz, y se evaluó también el comportamiento del sistema frente a distintas configuraciones de frecuencia. Este análisis resultó importante no solo para validar la CPU en sí, sino también para asegurar la correcta interacción con módulos auxiliares como la UART y las memorias embebidas.
+
+En este contexto, se observó que no siempre la máxima frecuencia teórica resultaba ser la opción más conveniente para la validación completa del sistema. En varias etapas del proyecto fue preferible priorizar una configuración estable y repetible, que permitiera verificar correctamente la ejecución del pipeline, el intercambio UART y la depuración interna, antes que exigir el límite absoluto de operación.
+
+Por lo tanto, la frecuencia de trabajo adoptada se definió considerando no solo el cumplimiento de timing, sino también la estabilidad global del sistema, la reproducibilidad de las pruebas y la correcta integración entre todos los módulos del procesador.

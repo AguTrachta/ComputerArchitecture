@@ -1,0 +1,65 @@
+\section{Debug Unit}
+
+La unidad de depuración (\textit{Debug Unit}) funciona como la máquina de estados principal encargada de controlar la ejecución de la CPU desde el exterior. Su objetivo es permitir la carga de programas, la ejecución paso a paso, la detención del procesador y la lectura de registros, memoria y latches internos, todo a través de la interfaz UART.
+
+De esta manera, actúa como un puente entre el usuario y la CPU, facilitando las pruebas y el análisis del sistema sin depender de herramientas externas más complejas.
+
+\subsection{Protocolo de Comunicación}
+La comunicación se realiza mediante comandos y respuestas codificados en bytes hexadecimales. Los comandos son enviados desde el host hacia la FPGA, y las respuestas son enviadas desde la FPGA hacia el host como confirmación o devolución de datos.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|p{8.5cm}|}
+\hline
+\textbf{Comando (Mnemónico)} & \textbf{Código Hex} & \textbf{Función} \\ \hline
+\texttt{CMD\_NONE} & \texttt{0x00} & Comando nulo, sin efecto. \\ \hline
+\texttt{CMD\_PROG\_BEGIN} & \texttt{0x10} & Indica el comienzo de la carga de un programa en memoria de instrucciones. Luego se envían los datos correspondientes. \\ \hline
+\texttt{CMD\_PROG\_END} & \texttt{0x11} & Marca el final de la programación. \\ \hline
+\texttt{CMD\_RUN} & \texttt{0x20} & Inicia la ejecución continua del programa cargado. \\ \hline
+\texttt{CMD\_STEP} & \texttt{0x21} & Avanza la ejecución un paso de reloj. \\ \hline
+\texttt{CMD\_STOP} & \texttt{0x22} & Detiene la ejecución actual. \\ \hline
+\texttt{CMD\_DUMP\_REGS} & \texttt{0x30} & Solicita el contenido completo del banco de registros. \\ \hline
+\texttt{CMD\_DUMP\_LATCHES} & \texttt{0x31} & Solicita el estado interno de los registros del pipeline. \\ \hline
+\texttt{CMD\_DUMP\_MEM} & \texttt{0x32} & Solicita el contenido de la memoria de datos. \\ \hline
+\texttt{CMD\_CLEAR\_IMEM} & \texttt{0x40} & Limpia la memoria de instrucciones escribiendo instrucciones NOP. \\ \hline
+\end{tabular}
+\caption{Comandos de entrada del protocolo UART.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|p{8.5cm}|}
+\hline
+\textbf{Respuesta (Acuse)} & \textbf{Código Hex} & \textbf{Significado} \\ \hline
+\texttt{RESP\_OK\_CLEAR} & \texttt{0xC0} & La memoria de instrucciones fue limpiada correctamente. \\ \hline
+\texttt{RESP\_OK\_PROG} & \texttt{0xC1} & La carga del programa se realizó correctamente. \\ \hline
+\texttt{RESP\_OK\_STEP} & \texttt{0xC2} & Se ejecutó correctamente un paso de reloj. \\ \hline
+\texttt{RESP\_OK\_STOP} & \texttt{0xC3} & La CPU fue detenida correctamente. \\ \hline
+\texttt{RESP\_OK\_RUN\_END} & \texttt{0xC4} & El programa terminó su ejecución al detectar una instrucción \texttt{HALT} y vaciar el pipeline. \\ \hline
+\texttt{RESP\_DUMP\_*} & \texttt{0xD0-D2} & Indican el inicio o desarrollo de una trama de volcado de datos. \\ \hline
+\texttt{RESP\_ERR} & \texttt{0xEE} & Indica que se recibió un comando inválido o inesperado. \\ \hline
+\end{tabular}
+\caption{Respuestas enviadas por la Debug Unit al host.}
+\end{table}
+
+\subsection{Modos de Operación}
+La Debug Unit controla distintos modos de funcionamiento de la CPU a través de su máquina de estados y de la señal \texttt{pipeline\_en\_r}.
+
+\subsubsection{Modo Continuo (\texttt{CMD\_RUN})}
+Cuando el host envía el comando \texttt{0x20}, la Debug Unit pasa al estado \texttt{ST\_RUN\_CONTINUOUS} y habilita la ejecución continua del pipeline mediante \texttt{pipeline\_en\_r = 1}.
+
+Si durante la ejecución se detecta una instrucción \texttt{HALT}, el sistema deja de incorporar nuevas instrucciones y pasa al estado \texttt{ST\_DRAIN}. En este estado, el pipeline sigue avanzando únicamente para permitir que las instrucciones que ya estaban dentro terminen su recorrido de forma segura. Una vez que el pipeline queda vacío, se envía la respuesta \texttt{RESP\_OK\_RUN\_END} al host.
+
+\subsubsection{Modo Paso a Paso (\texttt{CMD\_STEP})}
+Cuando se envía el comando \texttt{0x21}, la Debug Unit habilita el pipeline solo durante un ciclo de reloj, permitiendo observar el avance exacto de una instrucción o de una transición interna.
+
+Este modo es especialmente útil para depuración, ya que permite analizar el comportamiento del procesador con mucho detalle, ciclo por ciclo.
+
+\subsection{Limpieza, Vaciado del Pipeline y Reinicio}
+Antes de cargar o ejecutar un programa, es importante limpiar correctamente tanto la memoria de instrucciones como los registros internos del pipeline para evitar comportamientos erróneos.
+
+\begin{itemize}
+    \item \textbf{Limpieza de Memoria de Instrucciones (\texttt{ST\_PROG\_CLEAR}):} Se activa mediante el comando \texttt{0x40}. La Debug Unit recorre toda la memoria de instrucciones utilizando un índice interno (\texttt{clear\_idx}) y escribe en cada posición la instrucción \texttt{32'h00000013}, que corresponde a un \texttt{NOP}. Esto asegura que no queden instrucciones residuales de ejecuciones anteriores.
+    
+    \item \textbf{Reinicio del Pipeline (\texttt{ST\_RESET\_EXEC}):} Complementa el proceso de inicialización limpiando los latches y estados internos del pipeline mediante la señal \texttt{reset\_exec\_r = 1}. Su función es evitar que queden datos viejos en los registros intermedios y garantizar que cada nueva ejecución comience desde un estado limpio.
+\end{itemize}

@@ -1,0 +1,128 @@
+\section{Arquitectura del Procesador RISC-V}
+
+\subsection{Formato de las Instrucciones}
+La arquitectura RV32I utiliza instrucciones de 32 bits de longitud fija. Según el tipo de instrucción, esos 32 bits se organizan en distintos campos, como \texttt{opcode}, \texttt{rd}, \texttt{rs1}, \texttt{rs2}, \texttt{funct3}, \texttt{funct7} e inmediatos. Estos campos permiten identificar qué operación debe realizar el procesador, qué registros participan y si la instrucción requiere un valor inmediato.
+
+Los formatos principales implementados en este procesador son: Tipo-R, Tipo-I, Tipo-S, Tipo-B, Tipo-U y Tipo-J.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|c|p{10cm}|}
+\hline
+\textbf{Tipo} & \textbf{Campos} \\ \hline
+R & \texttt{funct7 | rs2 | rs1 | funct3 | rd | opcode} \\ \hline
+I & \texttt{imm[11:0] | rs1 | funct3 | rd | opcode} \\ \hline
+S & \texttt{imm[11:5] | rs2 | rs1 | funct3 | imm[4:0] | opcode} \\ \hline
+B & \texttt{imm[12|10:5] | rs2 | rs1 | funct3 | imm[4:1|11] | opcode} \\ \hline
+U & \texttt{imm[31:12] | rd | opcode} \\ \hline
+J & \texttt{imm[20|10:1|11|19:12] | rd | opcode} \\ \hline
+\end{tabular}
+\caption{Formatos principales de instrucciones en RV32I.}
+\end{table}
+
+Cada formato responde a una necesidad distinta dentro del conjunto de instrucciones:
+
+\begin{itemize}
+    \item \textbf{Tipo-R:} se utiliza para operaciones entre registros, como \texttt{add}, \texttt{sub}, \texttt{and}, \texttt{or}, \texttt{sll} o \texttt{slt}. En este caso, los campos \texttt{funct3} y \texttt{funct7} permiten distinguir la operación exacta.
+    
+    \item \textbf{Tipo-I:} se utiliza para instrucciones con inmediato, como \texttt{addi}, \texttt{andi}, \texttt{ori}, cargas desde memoria (\texttt{lb}, \texttt{lh}, \texttt{lw}, etc.) y también \texttt{jalr}. Incluye un inmediato de 12 bits.
+    
+    \item \textbf{Tipo-S:} se utiliza para escrituras en memoria, como \texttt{sb}, \texttt{sh} y \texttt{sw}. En este formato, el inmediato está dividido en dos partes dentro de la instrucción.
+    
+    \item \textbf{Tipo-B:} se utiliza para saltos condicionales, como \texttt{beq} y \texttt{bne}. El inmediato también aparece dividido, y luego debe reconstruirse para calcular la dirección de salto.
+    
+    \item \textbf{Tipo-U:} se utiliza en instrucciones como \texttt{lui}, donde se carga un inmediato de 20 bits en la parte superior del registro destino.
+    
+    \item \textbf{Tipo-J:} se utiliza en instrucciones de salto como \texttt{jal}, donde el inmediato permite calcular una dirección de destino más amplia.
+\end{itemize}
+
+Esta organización fija de los bits simplifica la etapa de decodificación, ya que permite extraer de manera ordenada los campos relevantes de cada instrucción y generar, a partir de ellos, tanto las señales de control como los operandos necesarios para la ejecución.
+
+\subsubsection{Ejemplo de decodificación}
+Por ejemplo, la instrucción \texttt{add x5, x1, x2} corresponde al formato Tipo-R. En este caso:
+\begin{itemize}
+    \item \texttt{opcode} indica que se trata de una operación aritmética entre registros,
+    \item \texttt{rd = x5} señala el registro destino,
+    \item \texttt{rs1 = x1} y \texttt{rs2 = x2} indican los registros fuente,
+    \item \texttt{funct3} y \texttt{funct7} determinan que la operación exacta es una suma.
+\end{itemize}
+
+De forma similar, en instrucciones como \texttt{addi x5, x1, 10}, el formato Tipo-I conserva los campos \texttt{rd} y \texttt{rs1}, pero reemplaza \texttt{rs2} y \texttt{funct7} por un inmediato de 12 bits, que luego será extendido y utilizado por la ALU.
+
+\subsection{Estructura del Pipeline}
+El núcleo del procesador implementa una arquitectura segmentada de 5 etapas: \texttt{IF}, \texttt{ID}, \texttt{EX}, \texttt{MEM} y \texttt{WB}. Estas etapas están separadas por registros intermedios o \textit{latches} (\texttt{if\_id\_reg}, \texttt{id\_ex\_reg}, \texttt{ex\_mem\_reg}, \texttt{mem\_wb\_reg}).
+
+En el archivo \texttt{top.v} se realiza la interconexión de todas ellas. Una característica importante de esta arquitectura es que la resolución de saltos incondicionales (\texttt{JAL}, \texttt{JALR}) y condicionales (\texttt{BRANCH}) se realiza de forma temprana en la etapa de decodificación (\texttt{ID}). Esto puede verse en las señales de redirección generadas en ID (\texttt{redirect\_target\_id}), que alimentan directamente al multiplexor del PC en la etapa \texttt{IF}. Gracias a esto, se reduce la penalización cuando un salto es tomado, en comparación con otros diseños que resuelven estas instrucciones recién en la etapa \texttt{EX}.
+
+\subsection{Unidad de Control y Decodificación}
+El recorrido de los datos y el comportamiento del procesador dependen principalmente de la Unidad de Control. Su implementación se concentra en dos submódulos instanciados dentro de la etapa de decodificación (\texttt{id\_stage.v}):
+
+\begin{itemize}
+    \item \textbf{\texttt{control\_unit.v}:} A partir del \texttt{opcode} de 7 bits, genera las señales de control de la ruta de datos. Por ejemplo, al detectar el opcode \texttt{7'b0000011}, correspondiente a una instrucción de carga (\texttt{LW}), activa \texttt{MemRead = 1}, indica que el dato que se escribirá en el banco de registros proviene de memoria (\texttt{MemToReg = 1}) y selecciona el inmediato como segundo operando de la ALU (\texttt{ALUSrc = 1}) para calcular la dirección efectiva.
+    
+    \item \textbf{\texttt{rv\_decoder.v}:} Se encarga de la decodificación fina de las operaciones de la ALU. Interpreta los campos \texttt{funct3} y \texttt{funct7} de las instrucciones Tipo-R y Tipo-I para determinar qué operación exacta debe realizarse, como suma, resta, desplazamientos o comparaciones.
+\end{itemize}
+
+\subsection{Unidad de Detección de Riesgos (Hazards) y Forwarding}
+La ejecución en pipeline introduce dependencias entre instrucciones que deben resolverse para mantener el funcionamiento correcto del procesador. Para ello, el diseño incluye dos mecanismos principales: \textit{forwarding}, que adelanta resultados entre etapas, y \textit{stalling}, que detiene temporalmente el avance del pipeline cuando no es posible resolver un conflicto de otra manera.
+
+\subsubsection{Valores y Lógica de Forwarding}
+El módulo \texttt{forwarding\_unit.v} evita ciclos de espera innecesarios adelantando resultados desde etapas posteriores (\texttt{EX/MEM} o \texttt{MEM/WB}) hacia las entradas de la ALU en la etapa \texttt{EX}. Para esto, genera dos señales de selección: \texttt{fwdA} para el operando \texttt{rs1} y \texttt{fwdB} para el operando \texttt{rs2}.
+
+En la siguiente tabla se resumen los valores utilizados:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|c|c|p{8.5cm}|}
+\hline
+\textbf{Valor (fwdA/B)} & \textbf{Tipo de Forwarding} & \textbf{Acción del Mux} \\ \hline
+\texttt{2'b00} & Sin forwarding & Se usa directamente el valor proveniente del banco de registros almacenado en el latch \texttt{ID/EX}. \\ \hline
+\texttt{2'b10} & Desde EX/MEM & Se toma el resultado adelantado desde \texttt{EX/MEM}. Esto ocurre cuando la instrucción inmediatamente anterior ya calculó el dato necesario. \\ \hline
+\texttt{2'b01} & Desde MEM/WB & Se toma el valor adelantado desde \texttt{MEM/WB}. Se usa cuando no aplica forwarding desde \texttt{EX/MEM}. \\ \hline
+\end{tabular}
+\caption{Valores codificados para el MUX de forwarding de los operandos de la ALU.}
+\end{table}
+
+\subsubsection{Detección y Resolución de Hazards (Stalls y Flushes)}
+Cuando un conflicto no puede resolverse mediante forwarding, entra en acción el módulo \texttt{hazard\_unit.v}.
+
+En estos casos, la unidad detiene temporalmente el avance del pipeline activando \texttt{stall\_if} y \texttt{stall\_id}, lo que congela el Program Counter y la etapa de decodificación. Al mismo tiempo, puede inyectar una burbuja o \textit{NOP} mediante \texttt{flush\_idex = 1}. Las situaciones principales se resumen a continuación:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|p{5cm}|p{7cm}|}
+\hline
+\textbf{Clasificación} & \textbf{Dependencia} & \textbf{Solución aplicada} \\ \hline
+\textit{Load-Use} & La instrucción en \texttt{EX} es un \texttt{LW} y su registro destino (\texttt{rd}) es utilizado inmediatamente por la instrucción en \texttt{ID}. & Se inserta \textbf{1 burbuja} (+1 stall). Luego, el dato puede recuperarse mediante forwarding desde \texttt{MEM/WB}. \\ \hline
+\textit{Branch-EX} & Un \texttt{Branch} en \texttt{ID} necesita comparar un valor que todavía se está calculando en la etapa \texttt{EX}. & Se inserta \textbf{1 burbuja} (+1 stall) para esperar a que el dato esté disponible. \\ \hline
+\textit{Branch-MEM} & Un \texttt{Branch} en \texttt{ID} depende de un dato cargado desde memoria y aún no disponible. & Se requieren \textbf{2 ciclos de espera}. \\ \hline
+\end{tabular}
+\caption{Casos principales que generan stalls o flushes en el pipeline.}
+\end{table}
+
+\subsection{Ejemplos Analíticos de Riesgos de Datos en Ensamblador}
+Para mostrar de forma práctica cómo actúan estos mecanismos, se presentan algunos ejemplos en ensamblador RV32I.
+
+\textbf{Ejemplo 1: Forwarding continuo sin penalización}
+\begin{verbatim}
+  1. add x1, x2, x3   ; Suma y guarda el resultado en x1
+  2. add x4, x1, x5   ; Usa inmediatamente el valor de x1
+  3. add x6, x1, x7   ; Vuelve a usar x1 en la instrucción siguiente
+\end{verbatim}
+
+Sin forwarding, estas instrucciones generarían conflictos. Sin embargo, al ejecutar la línea 2, el valor de \texttt{x1} todavía no fue escrito en el banco de registros, pero la unidad de forwarding detecta que está disponible en \texttt{EX/MEM}, por lo que activa \texttt{fwdA = 2'b10}. Luego, en la línea 3, ese mismo valor ya se encuentra más adelante en el pipeline, y se utiliza forwarding desde \texttt{MEM/WB} con \texttt{fwdA = 2'b01}. De esta forma, no es necesario detener la ejecución.
+
+\textbf{Ejemplo 2: Load-Use Hazard}
+\begin{verbatim}
+  1. lw  x1, 0(x2)    ; Carga un dato desde memoria en x1
+  2. add x3, x1, x4   ; Usa inmediatamente el valor cargado en x1
+\end{verbatim}
+
+En este caso, la instrucción \texttt{lw} recién obtiene el dato al final de la etapa \texttt{MEM}, por lo que la instrucción siguiente no puede usarlo de inmediato. Como no es posible resolver este caso con forwarding en el mismo ciclo, la unidad de hazards activa \texttt{stall\_if = 1}, \texttt{stall\_id = 1} y \texttt{flush\_idex = 1}, insertando una burbuja en el pipeline. Luego de ese ciclo de espera, el valor ya puede ser adelantado mediante forwarding desde \texttt{MEM/WB}.
+
+\subsection{Módulo de Comunicación UART y FIFOs}
+La comunicación con el sistema externo se realiza mediante una interfaz UART asincrónica, compuesta por tres módulos principales: \texttt{baud\_gen.v}, \texttt{uart\_rx.v} y \texttt{uart\_tx.v}.
+
+Como el reloj interno del sistema trabaja a frecuencias mucho mayores ($85$ a $100$ MHz) que la velocidad de transmisión serie, fue necesario incorporar buffers intermedios mediante \texttt{fifo.v}.
+
+Estas FIFOs se implementan como memorias circulares con dos punteros: uno de lectura (\texttt{r\_ptr\_reg}) y otro de escritura (\texttt{w\_ptr\_reg}). Esto permite almacenar temporalmente los datos y desacoplar la velocidad de la CPU de la velocidad de la UART. Así, aunque el host envíe comandos en ráfaga, estos quedan correctamente almacenados y se procesan en orden, evitando pérdidas o sobreescrituras mientras la CPU continúa con otras tareas.

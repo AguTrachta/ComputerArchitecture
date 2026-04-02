@@ -1,0 +1,43 @@
+\section{Resultados de Simulación}
+
+\subsection{Casos de Prueba}
+Para validar el funcionamiento del procesador se desarrollaron distintos casos de prueba en simulación, tanto a nivel de módulos individuales como del sistema completo. En una primera etapa, se verificó el comportamiento de bloques fundamentales como la ALU, la memoria de datos, la memoria de instrucciones, la unidad de forwarding y la unidad de detección de hazards. Luego, se realizaron pruebas integradas sobre el pipeline completo utilizando programas en ensamblador RV32I especialmente diseñados para ejercitar los distintos caminos de ejecución.
+
+Los casos considerados incluyeron operaciones aritméticas y lógicas entre registros, instrucciones con inmediato, accesos a memoria mediante \texttt{load} y \texttt{store}, y secuencias con dependencias de datos entre instrucciones consecutivas. También se probaron escenarios con riesgos del tipo \textit{load-use}, dependencias en instrucciones de salto condicional y situaciones donde el forwarding resultaba suficiente para evitar detenciones innecesarias del pipeline.
+
+Además, se verificó el funcionamiento de la \textit{Debug Unit} mediante testbenchs que simularon el intercambio de comandos por UART. Esto permitió comprobar la correcta recepción de órdenes como carga de programa, ejecución continua, ejecución paso a paso, detención, limpieza de memoria y volcado del estado interno del procesador. Estas pruebas fueron especialmente útiles para detectar errores de integración entre módulos que no aparecían al analizar cada bloque por separado.
+
+Un aspecto importante del proceso de simulación fue la necesidad de depurar problemas reales de temporización lógica y de sincronización funcional. Entre ellos se destacaron la correcta propagación de datos a través del pipeline, la validación del vaciado completo ante una instrucción \texttt{HALT}, y la correspondencia entre la latencia esperada de la memoria y el momento en que los datos debían estar disponibles para escritura o forwarding.
+
+\subsection{Comportamiento ante la Ausencia de Instrucción HALT}
+Las simulaciones permitieron comprobar que el procesador mantiene un comportamiento estable aun cuando el programa cargado no contiene una instrucción \texttt{HALT}. En este caso, la \textit{Debug Unit} nunca detecta la condición de finalización del programa, por lo que la CPU continúa ejecutando instrucciones de manera indefinida mientras permanezca habilitada en modo continuo.
+
+Sin embargo, este comportamiento no produce fallos internos ni estados inválidos. Esto se debe a que, antes de programar una nueva secuencia de instrucciones, la memoria de instrucciones es limpiada mediante el estado \texttt{ST\_PROG\_CLEAR}, reescribiendo todas sus posiciones con instrucciones \texttt{NOP}. Como resultado, si el contador de programa avanza más allá del código útil cargado por el usuario, el procesador continúa leyendo instrucciones neutras y el pipeline sigue operando de forma predecible.
+
+En estas condiciones, el \textit{Program Counter} continúa incrementándose hasta recorrer toda la memoria direccionable y eventualmente reiniciar su recorrido por desborde natural, sin provocar excepciones ni comportamientos erráticos dentro de la arquitectura implementada. Desde el punto de vista funcional, esto significa que la ejecución no termina por sí sola, pero el sistema sigue siendo controlable desde el exterior.
+
+Este punto fue relevante durante la etapa de pruebas, ya que permitió confirmar que la finalización del programa no debía depender únicamente del agotamiento del código cargado, sino de una condición explícita de parada. También ayudó a validar la necesidad de contar con mecanismos externos de control, como \texttt{CMD\_STOP}, para abortar la ejecución en cualquier momento desde la interfaz de depuración.
+
+A su vez, el análisis de este caso permitió ajustar el comportamiento del sistema ante la detección de \texttt{HALT}. En particular, fue importante distinguir entre detener inmediatamente el ingreso de nuevas instrucciones y permitir que las que ya estaban dentro del pipeline terminaran su recorrido. Esta dificultad llevó a refinar la lógica de vaciado dinámico del pipeline, evitando soluciones rígidas basadas únicamente en una cantidad fija de ciclos.
+
+\subsection{Capturas de Simulación}
+A continuación, se referencian los \textit{waveforms} obtenidos en la herramienta de simulación, los cuales permiten observar de manera directa el comportamiento temporal del procesador y de la unidad de depuración ante los distintos casos ensayados.
+
+En estas capturas resulta especialmente útil mostrar:
+\begin{itemize}
+    \item la evolución del \textit{Program Counter},
+    \item el contenido de las instrucciones en cada etapa del pipeline,
+    \item las señales de \texttt{stall}, \texttt{flush} y \texttt{forwarding},
+    \item la escritura en el banco de registros,
+    \item los accesos a memoria de datos,
+    \item y la transición de estados de la \textit{Debug Unit}.
+\end{itemize}
+
+Estas observaciones permiten relacionar el comportamiento esperado a nivel teórico con su implementación efectiva en hardware descriptivo, y fueron fundamentales para verificar que la resolución de riesgos, saltos y detenciones estuviera ocurriendo en el momento correcto.
+
+% A COMPLETAR: Agregar aquí las capturas de pantalla resolutivas de los testbenchs del programa. Se recomienda utilizar el siguiente formato:
+% \begin{figure}[h] 
+%   \centering 
+%   \includegraphics[width=0.8\textwidth]{img/nombre_archivo.png} 
+%   \caption{Descripción del waveform capturado.} 
+% \end{figure}
