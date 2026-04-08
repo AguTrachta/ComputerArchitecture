@@ -1,3 +1,5 @@
+\newpage
+
 \section{Arquitectura del Procesador RISC-V}
 
 \subsection{Formato de las Instrucciones}
@@ -123,6 +125,6 @@ En este caso, la instrucción \texttt{lw} recién obtiene el dato al final de la
 \subsection{Módulo de Comunicación UART y FIFOs}
 La comunicación con el sistema externo se realiza mediante una interfaz UART asincrónica, compuesta por tres módulos principales: \texttt{baud\_gen.v}, \texttt{uart\_rx.v} y \texttt{uart\_tx.v}.
 
-Como el reloj interno del sistema trabaja a frecuencias mucho mayores ($85$ a $100$ MHz) que la velocidad de transmisión serie, fue necesario incorporar buffers intermedios mediante \texttt{fifo.v}.
+Como el reloj interno del sistema trabaja a frecuencias mucho mayores que la velocidad de transmisión serie (base de $100$ MHz), fue necesario incorporar buffers intermedios mediante \texttt{fifo.v}.
 
 Estas FIFOs se implementan como memorias circulares con dos punteros: uno de lectura (\texttt{r\_ptr\_reg}) y otro de escritura (\texttt{w\_ptr\_reg}). Esto permite almacenar temporalmente los datos y desacoplar la velocidad de la CPU de la velocidad de la UART. Así, aunque el host envíe comandos en ráfaga, estos quedan correctamente almacenados y se procesan en orden, evitando pérdidas o sobreescrituras mientras la CPU continúa con otras tareas.

@@ -58,9 +58,11 @@ module rv_decoder #(
         else if (is_itype) begin
             case (funct3)
                 3'b000: alu_op = ADD;   // ADDI
+                3'b001: alu_op = SLL;   // SLLI
                 3'b010: alu_op = SLT;   // SLTI
                 3'b011: alu_op = SLTU;  // SLTIU
                 3'b100: alu_op = XOR;   // XORI
+                3'b101: alu_op = (funct7 == 7'b0100000) ? SRA : SRL; // SRAI / SRLI
                 3'b110: alu_op = OR;    // ORI
                 3'b111: alu_op = AND;   // ANDI
                 default: alu_op = ADD;

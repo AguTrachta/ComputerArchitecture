@@ -1,26 +1,68 @@
-\documentclass[12pt,a4paper]{article}
+\documentclass[a4paper,12pt]{article}
+
+% Codificación y lenguaje
 \usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
 \usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{caption}
+
+% Paquetes esenciales
 \usepackage{graphicx}
 \usepackage{geometry}
-\geometry{a4paper, margin=2cm}
+\usepackage{datetime}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{parskip}
+\usepackage{array}
+\usepackage{float}
+\usepackage{placeins}
 \usepackage{hyperref}
+% Paquetes para código fuente
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}  
 
-\title{Trabajo Práctico 3: RISC-V Pipeline}
-\author{Agustín Trachta \and Agustín Pallardó}
-\date{\today}
+% Configuración del estilo de listings para código Arduino
+\lstdefinestyle{arduino}{
+  language=C++,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  stringstyle=\color{red},
+  numbers=left,
+  numberstyle=\tiny,
+  stepnumber=1,
+  numbersep=5pt,
+  backgroundcolor=\color{white},
+  frame=single,
+  breaklines=true,
+  captionpos=b
+}
+\lstset{style=arduino}
+
+% Márgenes del documento
+\geometry{left=3cm, right=2.5cm, top=3cm, bottom=3cm}
 
 \begin{document}
 
-\maketitle
-\tableofcontents
-\newpage
+%\title{Trabajo Práctico 3: RISC-V Pipeline}
+%\author{Agustín Trachta \and Agustín Pallardó}
+%\date{\today}
 
+%\begin{document}
+
+%\maketitle
+%\tableofcontents
+%\newpage
+
+\input{sections/00_caratula}
 \input{sections/01_introduccion}
-\input{sections/02_arquitectura}
-\input{sections/03_debug_unit}
-\input{sections/04_resultados_simulacion}
-\input{sections/05_sintesis_timing}
-\input{sections/06_conclusiones}
+\input{sections/02_objetivos}
+\input{sections/03_arquitectura}
+\input{sections/04_debug_unit}
+\input{sections/05_resultados_simulacion}
+\input{sections/06_sintesis_timing}
+\input{sections/07_conclusiones}
 
 \end{document}
