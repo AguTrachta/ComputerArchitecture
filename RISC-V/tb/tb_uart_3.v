@@ -42,23 +42,14 @@ module tb_uart_3;
   localparam [7:0] CMD_STEP       = 8'h21;
   localparam [7:0] CMD_STOP       = 8'h22;
   localparam [7:0] CMD_CLEAR_IMEM = 8'h40;
+  localparam [7:0] RESP_OK_STEP   = 8'hC2;
+  localparam [7:0] RESP_OK_RUN_END = 8'hC4;
 
   reg clk, reset;
   reg rx;
   reg seen_drain;
-    reg [31:0] x1_after_stop1;
-    reg [31:0] x1_after_stop2;
-
-    initial begin
-      seen_drain = 1'b0;
-    end
-    
-    always @(posedge clk) begin
-      if (reset)
-        seen_drain <= 1'b0;
-      else if (dut.dbg_u.state == dut.dbg_u.ST_DRAIN)
-        seen_drain <= 1'b1;
-    end
+  reg [31:0] x1_after_stop1;
+  reg [31:0] x1_after_stop2;
 
   wire tx;
 
@@ -89,6 +80,9 @@ module tb_uart_3;
 
   localparam PROG3_WORDS = 15; // run + stop + continue
   reg [31:0] prog_stop_resume [0:PROG3_WORDS-1];
+
+  localparam PROG4_WORDS = 4; // store + halt
+  reg [31:0] prog_store_halt [0:PROG4_WORDS-1];
 
   initial begin
     // Programa 1: addi/addi/add/halt
@@ -188,6 +182,12 @@ module tb_uart_3;
     
     // loop infinito
     prog_stop_resume[14] = 32'h0000006F; // jal x0, 0
+
+    // Programa 4: store con HALT inmediatamente después
+    prog_store_halt[0] = 32'h00000093; // addi x1, x0, 0
+    prog_store_halt[1] = 32'h02A00113; // addi x2, x0, 42
+    prog_store_halt[2] = 32'h0020A023; // sw x2, 0(x1)
+    prog_store_halt[3] = 32'hffffffff; // HALT
   end
 
   // ============================================================
@@ -254,6 +254,20 @@ module tb_uart_3;
     begin
       for (t = 0; t < n; t = t + 1)
         @(posedge clk);
+    end
+  endtask
+
+  task reset_halt_tracking;
+    begin
+      seen_drain               = 1'b0;
+      run_end_resp_count       = 0;
+      step_resp_count          = 0;
+      first_drain_cycle        = -1;
+      first_pipeline_empty_cycle = -1;
+      last_run_end_cycle       = -1;
+      last_step_resp_cycle     = -1;
+      last_wb_cycle            = -1;
+      last_mem_write_cycle     = -1;
     end
   endtask
 
@@ -347,6 +361,7 @@ module tb_uart_3;
           1: uart_send_word_be(prog_run_halt[k]);
           2: uart_send_word_be(prog_steps[k]);
           3: uart_send_word_be(prog_stop_resume[k]);
+          4: uart_send_word_be(prog_store_halt[k]);
           default: uart_send_word_be(32'h00000013);
         endcase
       end
@@ -367,6 +382,7 @@ module tb_uart_3;
           1: exp = prog_run_halt[k];
           2: exp = prog_steps[k];
           3: exp = prog_stop_resume[k];
+          4: exp = prog_store_halt[k];
           default: exp = 32'h00000013;
         endcase
 
@@ -419,16 +435,56 @@ module tb_uart_3;
   // ============================================================
 
   integer wb_commit_count;
+  integer run_end_resp_count;
+  integer step_resp_count;
+  integer first_drain_cycle;
+  integer first_pipeline_empty_cycle;
+  integer last_run_end_cycle;
+  integer last_step_resp_cycle;
+  integer last_wb_cycle;
+  integer last_mem_write_cycle;
+  integer step_cmd_count;
 
   initial begin
     wb_commit_count = 0;
+    reset_halt_tracking();
   end
 
   always @(posedge clk) begin
     #1;
     if (!reset && dut.wb_we) begin
       wb_commit_count = wb_commit_count + 1;
+      last_wb_cycle = cyc;
       $display("[WB ] C%0d -> x%0d <= %h", cyc, dut.wb_rd_idx, dut.wb_write_data);
+    end
+  end
+
+  always @(posedge clk) begin
+    #1;
+    if (reset) begin
+      seen_drain = 1'b0;
+    end else begin
+      if (dut.dbg_u.state == dut.dbg_u.ST_DRAIN) begin
+        seen_drain = 1'b1;
+        if (first_drain_cycle < 0)
+          first_drain_cycle = cyc;
+      end
+
+      if (seen_drain && dut.pipeline_empty && (first_pipeline_empty_cycle < 0))
+        first_pipeline_empty_cycle = cyc;
+
+      if (dut.dbg_tx_wr_en && (dut.dbg_tx_data == RESP_OK_RUN_END)) begin
+        run_end_resp_count = run_end_resp_count + 1;
+        last_run_end_cycle = cyc;
+      end
+
+      if (dut.dbg_tx_wr_en && (dut.dbg_tx_data == RESP_OK_STEP)) begin
+        step_resp_count = step_resp_count + 1;
+        last_step_resp_cycle = cyc;
+      end
+
+      if (dut.mem_write_enable)
+        last_mem_write_cycle = cyc;
     end
   end
 
@@ -493,16 +549,35 @@ module tb_uart_3;
     // ----------------------------------------------------------
     $display("\n================ TEST 1: LOAD + RUN + HALT ================\n");
 
+    reset_halt_tracking();
     wb_commit_count = 0;
     load_program_from_array(PROG1_WORDS, 1);
     check_imem_array(PROG1_WORDS, 1);
 
     send_cmd_run();
 
-    //wait_dbg_drain();
     wait_dbg_idle();
+    wait_pipeline_drained(WAIT_HALT_TIMEOUT_CYC);
     if (!seen_drain) begin
       $display("ERR TEST1: nunca se vio ST_DRAIN");
+      $finish;
+    end
+    if (run_end_resp_count != 1) begin
+      $display("ERR TEST1: RESP_OK_RUN_END inesperado. count=%0d", run_end_resp_count);
+      $finish;
+    end
+    if (step_resp_count != 0) begin
+      $display("ERR TEST1: apareció RESP_OK_STEP durante RUN. count=%0d", step_resp_count);
+      $finish;
+    end
+    if (first_pipeline_empty_cycle < 0 || last_run_end_cycle < first_pipeline_empty_cycle) begin
+      $display("ERR TEST1: RUN_END llegó antes de pipeline_empty. empty=%0d run_end=%0d",
+               first_pipeline_empty_cycle, last_run_end_cycle);
+      $finish;
+    end
+    if (last_wb_cycle < 0 || last_wb_cycle >= last_run_end_cycle) begin
+      $display("ERR TEST1: último WB no quedó antes del fin. wb=%0d run_end=%0d",
+               last_wb_cycle, last_run_end_cycle);
       $finish;
     end
     wait_some_cycles(20);
@@ -521,18 +596,44 @@ module tb_uart_3;
     // ----------------------------------------------------------
     $display("\n================ TEST 2: LOAD + STEP x ciclos ================\n");
     
-    seen_drain = 1'b0;
+    reset_halt_tracking();
     wb_commit_count = 0;
     load_program_from_array(PROG2_WORDS, 2);
     check_imem_array(PROG2_WORDS, 2);
 
-    // Hacemos varios steps.
-    // Con HALT + drain conviene dar más de 8, porque STEP solo avanza 1 ciclo.
-    for (i = 0; i < 10; i = i + 1) begin
-      $display("[TB ] ---- STEP #%0d ----", i);
+    step_cmd_count = 0;
+    while ((run_end_resp_count == 0) && (step_cmd_count < 8)) begin
+      $display("[TB ] ---- STEP #%0d ----", step_cmd_count);
       send_cmd_step();
       wait_dbg_idle();
       wait_some_cycles(3);
+      step_cmd_count = step_cmd_count + 1;
+    end
+
+    wait_pipeline_drained(WAIT_HALT_TIMEOUT_CYC);
+
+    if (run_end_resp_count != 1) begin
+      $display("ERR TEST2: no apareció un único RESP_OK_RUN_END. count=%0d", run_end_resp_count);
+      $finish;
+    end
+    if (!seen_drain) begin
+      $display("ERR TEST2: nunca se vio ST_DRAIN al alcanzar HALT con STEP");
+      $finish;
+    end
+    if (step_resp_count != (step_cmd_count - 1)) begin
+      $display("ERR TEST2: RESP_OK_STEP inesperados. steps=%0d step_resp=%0d",
+               step_cmd_count, step_resp_count);
+      $finish;
+    end
+    if (last_step_resp_cycle >= last_run_end_cycle) begin
+      $display("ERR TEST2: RESP_OK_STEP apareció después de RUN_END. step=%0d run_end=%0d",
+               last_step_resp_cycle, last_run_end_cycle);
+      $finish;
+    end
+    if (first_pipeline_empty_cycle < 0 || last_run_end_cycle < first_pipeline_empty_cycle) begin
+      $display("ERR TEST2: RUN_END llegó antes de pipeline_empty. empty=%0d run_end=%0d",
+               first_pipeline_empty_cycle, last_run_end_cycle);
+      $finish;
     end
 
     check_reg(5'd1, 32'd5);
@@ -544,7 +645,7 @@ module tb_uart_3;
     // ----------------------------------------------------------
     $display("\n================ TEST 3: INFINITE LOOP + STOP + RESUME ================\n");
     
-    seen_drain = 1'b0;
+    reset_halt_tracking();
     wb_commit_count = 0;
     
     load_program_from_array(PROG3_WORDS, 3);
@@ -588,7 +689,46 @@ module tb_uart_3;
     end
     
     $display("[TB ] OK TEST3: x1 siguió contando tras reanudar");
-    
+
+    // ----------------------------------------------------------
+    // TEST 4: STORE + HALT
+    // ----------------------------------------------------------
+    $display("\n================ TEST 4: STORE + HALT ================\n");
+
+    reset_halt_tracking();
+    wb_commit_count = 0;
+    load_program_from_array(PROG4_WORDS, 4);
+    check_imem_array(PROG4_WORDS, 4);
+
+    send_cmd_run();
+    wait_dbg_idle();
+    wait_pipeline_drained(WAIT_HALT_TIMEOUT_CYC);
+
+    if (!seen_drain) begin
+      $display("ERR TEST4: nunca se vio ST_DRAIN");
+      $finish;
+    end
+    if (run_end_resp_count != 1) begin
+      $display("ERR TEST4: RESP_OK_RUN_END inesperado. count=%0d", run_end_resp_count);
+      $finish;
+    end
+    if (dut.u_dmem.mem[0] !== 32'h0000002A) begin
+      $display("ERR TEST4: memoria[0] incorrecta. got=%h exp=%h",
+               dut.u_dmem.mem[0], 32'h0000002A);
+      $finish;
+    end
+    if (last_mem_write_cycle < 0 || last_mem_write_cycle >= last_run_end_cycle) begin
+      $display("ERR TEST4: el store no ocurrió antes del RUN_END. store=%0d run_end=%0d",
+               last_mem_write_cycle, last_run_end_cycle);
+      $finish;
+    end
+    if (first_pipeline_empty_cycle < 0 || last_run_end_cycle < first_pipeline_empty_cycle) begin
+      $display("ERR TEST4: RUN_END llegó antes de pipeline_empty. empty=%0d run_end=%0d",
+               first_pipeline_empty_cycle, last_run_end_cycle);
+      $finish;
+    end
+    $display("[TB ] OK TEST4: store completado antes del fin del programa");
+     
     $display("\n================ TODOS LOS TESTS TERMINARON ================\n");
     $finish;
   end
