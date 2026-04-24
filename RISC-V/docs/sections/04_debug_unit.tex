@@ -1,0 +1,329 @@
+\newpage
+
+\section{Debug Unit}
+
+Con el fin de poder observar, controlar y validar el funcionamiento del procesador implementado, se diseñó una unidad de depuración externa al pipeline. Su función principal es actuar como intermediaria entre el host y el procesador. Esta unidad funciona como la máquina de estados principal encargada de controlar la ejecución de la CPU. Su objetivo es permitir la carga de programas, la ejecución paso a paso, la detención del procesador y la lectura de registros, memoria y latches internos, todo a través de la interfaz UART.
+
+La motivación principal para incorporar esta unidad fue crear un puente entre el usuario y la CPU, facilitando las pruebas y el análisis del sistema. En lugar de modificar directamente el núcleo para cada prueba, se definió una interfaz de control basada en comandos recibidos, de modo que un testbench o una aplicación externa puedan interactuar con el sistema de manera uniforme.
+
+\subsection{Rol de la Debug Unit dentro del sistema}
+
+La \texttt{debug\_unit} se ubica por fuera del pipeline, pero conectada a señales clave de control. Entre sus responsabilidades se encuentran:
+
+\begin{itemize}
+    \item Habilitar o detener la ejecución del pipeline mediante señales internas del pipeline.
+    \item Generar un reinicio controlado de la ejecución.
+    \item Limpiar y programar la memoria de instrucciones.
+    \item Recibir comandos desde una FIFO de recepción UART sin romper el funcionamiento.
+    \item Transmitir respuestas o estados por UART sin pisar la FIFO de transmisión.
+    \item Permite la utilización de HALT como breakpoint y además como mecanismo de finalización de la ejecución.
+    \item Gestiona mecanismos de lecturas de registros y memoria.
+\end{itemize}
+
+De esta forma, el procesador no necesita conocer detalles de la UART ni del protocolo de control; solamente expone ciertas entradas y salidas de depuración. Toda la secuencia de control de alto nivel queda encapsulada en una máquina de estados finitos dentro de la unidad de depuración.
+
+\subsection{Estados de la FSM}
+
+% La FSM de la unidad se dividió en cuatro grupos funcionales principales:
+
+% \begin{itemize}
+%     \item \textbf{Estados de control general}: ST\_IDLE, ST\_DECODE\_CMD, ST\_ERROR.
+%     \item \textbf{Estados de programación}: ST\_PROG\_BEGIN, ST\_PROG\_END, ST\_PROG\_CLEAR.
+%     \item \textbf{Estados de ejecución}: ST\_RUN\_CONTINUOUS, ST\_STEP\_ARM, ST\_STEP\_EXEC, ST\_RESET\_EXEC, ST\_DRAIN.
+%     \item \textbf{Estados de volcado de información}: ST\_DUMP\_REGS, ST\_DUMP\_LATCHES, ST\_DUMP\_MEM.
+% \end{itemize}
+
+% Profundizando en cada uno de estos, se tiene:
+
+La FSM posee muchos estados fundamentales para su correcto funcionamiento, por lo que se especificarán a continuación separados por tablas:
+
+\begin{center}
+\begin{tabular}{|l|c|p{8.3cm}|}
+\hline
+\textbf{Estado FSM} & \textbf{Bloque} & \textbf{Función} \\ \hline
+\texttt{ST\_IDLE} & General & Estado de espera. Mantiene el pipeline detenido y aguarda la llegada de un nuevo comando. \\ \hline
+\texttt{ST\_DECODE\_CMD} & General & Decodifica el comando recibido y selecciona la secuencia de estados correspondiente. \\ \hline
+\texttt{ST\_ERROR} & General & Maneja un comando inválido o una situación de error y envía una respuesta de error. \\ \hline
+\texttt{ST\_RUN\_CONTINUOUS} & Ejecución & Habilita la ejecución continua del pipeline hasta recibir STOP o detectar HALT. \\ \hline
+\texttt{ST\_STEP\_ARM} & Ejecución & Prepara un avance controlado de un paso habilitando transitoriamente el pipeline. \\ \hline
+\texttt{ST\_STEP\_EXEC} & Ejecución & Completa el paso de ejecución, vuelve a frenar el pipeline y responde al host. \\ \hline
+\texttt{ST\_RESET\_EXEC} & Ejecución & Aplica un reset de ejecución durante algunos ciclos para reinicializar el pipeline. \\ \hline
+\texttt{ST\_DRAIN} & Ejecución & Deja avanzar las instrucciones pendientes tras HALT hasta vaciar el pipeline. \\ \hline
+\texttt{ST\_DUMP\_DONE} & Dumps & Envía la marca de finalización de un dump y retorna al estado ocioso. \\ \hline
+\end{tabular}
+\captionof{table}{Estados generales y de ejecución de la FSM de la \texttt{debug\_unit}.}
+\end{center}
+
+\vspace{0.8em}
+
+\begin{center}
+\begin{tabular}{|l|c|p{8.3cm}|}
+\hline
+\textbf{Estado FSM} & \textbf{Bloque} & \textbf{Función} \\ \hline
+\texttt{ST\_PROG\_CLEAR} & Programación & Recorre la memoria de instrucciones escribiendo NOPs para limpiarla. \\ \hline
+\texttt{ST\_PROG\_BEGIN} & Programación & Inicializa la secuencia de carga del programa y prepara contadores y direcciones. \\ \hline
+\texttt{ST\_PROG\_LEN\_HI} & Programación & Lee el byte alto de la cantidad total de palabras del programa. \\ \hline
+\texttt{ST\_PROG\_LEN\_LO} & Programación & Lee el byte bajo de la cantidad total de palabras del programa. \\ \hline
+\texttt{ST\_PROG\_B0} & Programación & Lee el primer byte de una instrucción de 32 bits. \\ \hline
+\texttt{ST\_PROG\_B1} & Programación & Lee el segundo byte de una instrucción de 32 bits. \\ \hline
+\texttt{ST\_PROG\_B2} & Programación & Lee el tercer byte de una instrucción de 32 bits. \\ \hline
+\texttt{ST\_PROG\_B3} & Programación & Lee el cuarto byte de una instrucción de 32 bits. \\ \hline
+\texttt{ST\_PROG\_WRITE\_WORD} & Programación & Escribe en la memoria la palabra armada con los cuatro bytes recibidos. \\ \hline
+\texttt{ST\_PROG\_END} & Programación & Finaliza la programación, envía confirmación y da paso al reset de ejecución. \\ \hline
+\end{tabular}
+\captionof{table}{Estados de programación de la memoria de instrucciones.}
+\end{center}
+
+\vspace{0.8em}
+
+\begin{center}
+\begin{tabular}{|l|c|p{8.3cm}|}
+\hline
+\textbf{Estado FSM} & \textbf{Bloque} & \textbf{Función} \\ \hline
+\texttt{ST\_DUMP\_REGS\_HDR} & Dump REGS & Envía la cabecera del volcado de registros e inicializa el índice de lectura. \\ \hline
+\texttt{ST\_DUMP\_REGS\_SET\_IDX} & Dump REGS & Presenta el índice del registro que se va a leer. \\ \hline
+\texttt{ST\_DUMP\_REGS\_LATCH} & Dump REGS & Captura el valor del registro seleccionado en un registro interno. \\ \hline
+\texttt{ST\_DUMP\_REGS\_SEND\_B3} & Dump REGS & Envía el byte más significativo del registro leído. \\ \hline
+\texttt{ST\_DUMP\_REGS\_SEND\_B2} & Dump REGS & Envía el segundo byte del registro leído. \\ \hline
+\texttt{ST\_DUMP\_REGS\_SEND\_B1} & Dump REGS & Envía el tercer byte del registro leído. \\ \hline
+\texttt{ST\_DUMP\_REGS\_SEND\_B0} & Dump REGS & Envía el byte menos significativo del registro leído. \\ \hline
+\texttt{ST\_DUMP\_REGS\_NEXT} & Dump REGS & Avanza al siguiente registro o finaliza el dump si ya se enviaron todos. \\ \hline
+\end{tabular}
+\captionof{table}{Estados del volcado del banco de registros.}
+\end{center}
+
+\vspace{0.8em}
+
+\begin{center}
+\begin{tabular}{|l|c|p{8.3cm}|}
+\hline
+\textbf{Estado FSM} & \textbf{Bloque} & \textbf{Función} \\ \hline
+\texttt{ST\_DUMP\_MEM\_RD\_START\_HI} & Dump MEM & Lee el byte alto de la dirección inicial del dump de memoria. \\ \hline
+\texttt{ST\_DUMP\_MEM\_RD\_START\_LO} & Dump MEM & Lee el byte bajo de la dirección inicial del dump de memoria. \\ \hline
+\texttt{ST\_DUMP\_MEM\_RD\_COUNT} & Dump MEM & Lee la cantidad de palabras de memoria que se deben enviar. \\ \hline
+\texttt{ST\_DUMP\_MEM\_HDR} & Dump MEM & Envía la cabecera del dump de memoria e inicializa índices y contadores. \\ \hline
+\texttt{ST\_DUMP\_MEM\_SET\_ADDR} & Dump MEM & Coloca en la interfaz de memoria la dirección de la palabra a leer. \\ \hline
+\texttt{ST\_DUMP\_MEM\_WAIT} & Dump MEM & Espera un ciclo para permitir que la memoria entregue el dato. \\ \hline
+\texttt{ST\_DUMP\_MEM\_WAIT\_2} & Dump MEM & Agrega un ciclo extra de espera por la salida sincrónica de la BRAM. \\ \hline
+\texttt{ST\_DUMP\_MEM\_LATCH} & Dump MEM & Captura la palabra leída de memoria en un registro interno. \\ \hline
+\texttt{ST\_DUMP\_MEM\_SEND\_B3} & Dump MEM & Envía el byte más significativo de la palabra leída. \\ \hline
+\texttt{ST\_DUMP\_MEM\_SEND\_B2} & Dump MEM & Envía el segundo byte de la palabra leída. \\ \hline
+\texttt{ST\_DUMP\_MEM\_SEND\_B1} & Dump MEM & Envía el tercer byte de la palabra leída. \\ \hline
+\texttt{ST\_DUMP\_MEM\_SEND\_B0} & Dump MEM & Envía el byte menos significativo de la palabra leída. \\ \hline
+\texttt{ST\_DUMP\_MEM\_NEXT} & Dump MEM & Avanza a la siguiente palabra o finaliza el dump si se alcanzó la cantidad pedida. \\ \hline
+\end{tabular}
+\captionof{table}{Estados del volcado de memoria de datos.}
+\end{center}
+
+\vspace{0.8em}
+
+\begin{center}
+\begin{tabular}{|l|c|p{8.3cm}|}
+\hline
+\textbf{Estado FSM} & \textbf{Bloque} & \textbf{Función} \\ \hline
+\texttt{ST\_DUMP\_LATCH\_HDR} & Dump LATCHES & Envía la cabecera del volcado de latches e inicializa el índice de lectura. \\ \hline
+\texttt{ST\_DUMP\_LATCH\_SET\_IDX} & Dump LATCHES & Presenta el índice del latch del pipeline que se va a leer. \\ \hline
+\texttt{ST\_DUMP\_LATCH\_LATCH} & Dump LATCHES & Captura el contenido del latch seleccionado en un registro interno. \\ \hline
+\texttt{ST\_DUMP\_LATCH\_SEND\_B3} & Dump LATCHES & Envía el byte más significativo del latch leído. \\ \hline
+\texttt{ST\_DUMP\_LATCH\_SEND\_B2} & Dump LATCHES & Envía el segundo byte del latch leído. \\ \hline
+\texttt{ST\_DUMP\_LATCH\_SEND\_B1} & Dump LATCHES & Envía el tercer byte del latch leído. \\ \hline
+\texttt{ST\_DUMP\_LATCH\_SEND\_B0} & Dump LATCHES & Envía el byte menos significativo del latch leído. \\ \hline
+\texttt{ST\_DUMP\_LATCH\_NEXT} & Dump LATCHES & Avanza al siguiente latch o finaliza el dump cuando ya se enviaron todos. \\ \hline
+\end{tabular}
+\captionof{table}{Estados del volcado de registros inter-etapa del pipeline.}
+\end{center}
+
+\subsection{Protocolo de Comunicación}
+
+La comunicación se realiza mediante comandos y respuestas codificados en bytes hexadecimales. Los comandos son enviados desde el host hacia la FPGA, y las respuestas son enviadas desde la FPGA hacia el host como confirmación o devolución de datos.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|p{8.5cm}|}
+\hline
+\textbf{Comando (Mnemónico)} & \textbf{Código Hex} & \textbf{Función} \\ \hline
+\texttt{CMD\_NONE} & \texttt{0x00} & Comando nulo, sin efecto. \\ \hline
+\texttt{CMD\_PROG\_BEGIN} & \texttt{0x10} & Indica el comienzo de la carga de un programa en memoria de instrucciones. Luego se envían los datos correspondientes. \\ \hline
+\texttt{CMD\_PROG\_END} & \texttt{0x11} & Marca el final de la programación. \\ \hline
+\texttt{CMD\_RUN} & \texttt{0x20} & Inicia la ejecución continua del programa cargado. \\ \hline
+\texttt{CMD\_STEP} & \texttt{0x21} & Avanza la ejecución un paso de reloj. \\ \hline
+\texttt{CMD\_STOP} & \texttt{0x22} & Detiene la ejecución actual. \\ \hline
+\texttt{CMD\_DUMP\_REGS} & \texttt{0x30} & Solicita el contenido completo del banco de registros. \\ \hline
+\texttt{CMD\_DUMP\_LATCHES} & \texttt{0x31} & Solicita el estado interno de los registros del pipeline. \\ \hline
+\texttt{CMD\_DUMP\_MEM} & \texttt{0x32} & Solicita el contenido de la memoria de datos. \\ \hline
+\texttt{CMD\_CLEAR\_IMEM} & \texttt{0x40} & Limpia la memoria de instrucciones escribiendo instrucciones NOP. \\ \hline
+\end{tabular}
+\caption{Comandos de entrada del protocolo UART.}
+\end{table}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|p{8.5cm}|}
+\hline
+\textbf{Respuesta (Acuse)} & \textbf{Código Hex} & \textbf{Significado} \\ \hline
+\texttt{RESP\_OK\_CLEAR} & \texttt{0xC0} & La memoria de instrucciones fue limpiada correctamente. \\ \hline
+\texttt{RESP\_OK\_PROG} & \texttt{0xC1} & La carga del programa se realizó correctamente. \\ \hline
+\texttt{RESP\_OK\_STEP} & \texttt{0xC2} & Se ejecutó correctamente un paso de reloj. \\ \hline
+\texttt{RESP\_OK\_STOP} & \texttt{0xC3} & La CPU fue detenida correctamente. \\ \hline
+\texttt{RESP\_OK\_RUN\_END} & \texttt{0xC4} & El programa terminó su ejecución al detectar una instrucción \texttt{HALT} y vaciar el pipeline. \\ \hline
+\texttt{RESP\_DUMP\_*} & \texttt{0xD0-D2} & Indican el inicio o desarrollo de una trama de volcado de datos. \\ \hline
+\texttt{RESP\_ERR} & \texttt{0xEE} & Indica que se recibió un comando inválido o inesperado. \\ \hline
+\end{tabular}
+\caption{Respuestas enviadas por la Debug Unit al host.}
+\end{table}
+
+\subsection{Modos de Operación}
+La Debug Unit controla distintos modos de funcionamiento de la CPU a través de su máquina de estados y de la señal \texttt{pipeline\_en\_r}.
+
+\subsubsection{Modo Continuo (\texttt{CMD\_RUN})}
+Cuando el host envía el comando \texttt{0x20}, la Debug Unit pasa al estado \texttt{ST\_RUN\_CONTINUOUS} y habilita la ejecución continua del pipeline mediante \texttt{pipeline\_en\_r = 1}.
+
+Si durante la ejecución se detecta una instrucción \texttt{HALT}, el sistema deja de incorporar nuevas instrucciones y pasa al estado \texttt{ST\_DRAIN}. En este estado, el pipeline sigue avanzando únicamente para permitir que las instrucciones que ya estaban dentro terminen su recorrido de forma segura. Una vez que el pipeline queda vacío, se envía la respuesta \texttt{RESP\_OK\_RUN\_END} al host.
+
+\subsubsection{Comando STOP}
+
+El comando \texttt{CMD\_STOP} fue diseñado para pausar la ejecución, no para terminarla. La intención era que, al recibir un \texttt{STOP} por UART, el pipeline deje de avanzar y el procesador conserve su estado interno, incluyendo PC, registros, latches y cualquier otra información visible. Posteriormente, un nuevo \texttt{CMD\_RUN} o \texttt{CMD\_STEP} permite continuar desde ese mismo punto.
+
+La implementación final consistió en que, al detectar \texttt{CMD\_STOP} durante \texttt{ST\_RUN\_CONTINUOUS}, se consume el byte recibido, se desactiva \texttt{o\_pipeline\_en}, se transmite \texttt{RESP\_OK\_STOP} y se regresa a \texttt{ST\_IDLE}. Como \texttt{ST\_IDLE} mantiene el pipeline frenado, no fue necesario agregar un estado especial de pausa, ni tampoco se manipuló el reloj del sistema.
+
+\subsubsection{Modo Paso a Paso (\texttt{CMD\_STEP})}
+Cuando se envía el comando \texttt{0x21} (\texttt{CMD\_STEP}), la Debug Unit habilita el pipeline solo durante un ciclo de reloj, permitiendo observar el avance exacto de una instrucción o de una transición interna de forma controlada. 
+
+La estrategia adoptada fue dividirlo en dos estados: \texttt{ST\_STEP\_ARM} y \texttt{ST\_STEP\_EXEC}. En el primero se habilita el pipeline; en el segundo se vuelve a deshabilitar y se responde con \texttt{RESP\_OK\_STEP}. La idea de esta separación fue asegurar un pulso limpio de habilitación, evitando que la acción de un único paso quedara ambigua por compartir demasiada lógica con \texttt{RUN}.
+
+Este modo es especialmente útil para depuración, ya que permite analizar el comportamiento del procesador con mucho detalle, ciclo por ciclo.
+
+\subsubsection{Señal HALT}
+
+Además del control externo por UART, el procesador puede detectar internamente una condición de fin de programa, representada por la señal \texttt{i\_halt}. Esta señal no proviene del host, sino de la lógica de decodificación o control del propio pipeline, y se activa cuando se reconoce una instrucción especial de parada.
+
+Cuando \texttt{i\_halt} se detecta durante \texttt{ST\_RUN\_CONTINUOUS}, no se detiene inmediatamente el pipeline. En cambio, se ingresa al estado \texttt{ST\_DRAIN}. La razón es que, al momento de detectar \texttt{HALT}, todavía pueden existir instrucciones válidas en etapas posteriores del pipeline. Si se congelara la ejecución en ese mismo instante, algunas de esas instrucciones podrían no completar su \textit{writeback}, generando resultados incorrectos o incompletos.
+
+Por ese motivo se implementó una política de ``drenado'' del pipeline.
+
+\subsection{Limpieza, Vaciado del Pipeline y Reinicio}
+Antes de cargar o ejecutar un programa, es importante limpiar correctamente tanto la memoria de instrucciones como los registros internos del pipeline para evitar comportamientos erróneos.
+
+\begin{itemize}
+    \item \textbf{Limpieza de Memoria de Instrucciones (\texttt{ST\_PROG\_CLEAR}):} Se activa mediante el comando \texttt{0x40}. La Debug Unit recorre toda la memoria de instrucciones utilizando un índice interno (\texttt{clear\_idx}) y escribe en cada posición la instrucción \texttt{32'h00000013}, que corresponde a un \texttt{NOP}. Esto asegura que no queden instrucciones residuales de ejecuciones anteriores.
+    
+    \item \textbf{Reinicio del Pipeline (\texttt{ST\_RESET\_EXEC}):} Complementa el proceso de inicialización limpiando los latches y estados internos del pipeline mediante la señal \texttt{reset\_exec\_r = 1}. Su función es evitar que queden datos viejos en los registros intermedios y garantizar que cada nueva ejecución comience desde un estado limpio.
+\end{itemize}
+
+\subsection{Mecanismo de recepción UART y desacople de FIFO}
+
+Uno de los primeros aspectos de diseño que requirió atención fue la interfaz con la FIFO de recepción. No resultaba conveniente consumir directamente i\_rx\_data en la misma lógica combinacional que decide el próximo estado, debido a que ello podía producir dependencias temporales delicadas entre el pulso de lectura y la validez efectiva del dato.
+
+Para resolver esto, se implementó un pequeño desacople con tres señales y registros internos:
+
+\begin{itemize}
+    \item \textbf{rx\_pop\_pending}: indica que en el ciclo anterior se solicitó una lectura a la FIFO.
+    \item \textbf{rx\_byte\_reg}: almacena el byte efectivamente recibido.
+    \item \textbf{rx\_byte\_valid}: indica que el byte almacenado es válido y todavía no fue consumido por la FSM.
+\end{itemize}
+
+La idea es la siguiente: cuando la FSM detecta que la FIFO no está vacía y no hay un byte pendiente, genera o\_rx\_rd\_en. En el siguiente ciclo, el dato leído se captura en rx\_byte\_reg y se marca como válido. Luego, cualquier estado puede consumirlo de manera estable mediante next\_rx\_consume. Este pequeño buffer simplificó mucho la lógica de recepción y evitó errores de sincronización.
+
+\subsection{Programación de memoria de instrucciones}
+
+La carga del programa en la memoria de instrucciones se implementó como una secuencia explícita. Primero, el host puede enviar \texttt{CMD\_CLEAR\_IMEM} para llenar la memoria con instrucciones \texttt{NOP}. Esto resulta útil para garantizar que, aun fuera del rango del programa cargado, el procesador no ejecute contenido residual.
+
+A continuación, \texttt{CMD\_PROG\_BEGIN} inicia la carga propiamente dicha. El protocolo adoptado transmite:
+
+\begin{enumerate}
+    \item Dos bytes con la cantidad total de palabras a grabar;
+    \item Luego, por cada instrucción, cuatro bytes correspondientes a la palabra de 32 bits.
+\end{enumerate}
+
+La FSM recorre los estados \texttt{ST\_PROG\_LEN\_HI} y \texttt{ST\_PROG\_LEN\_LO} para reconstruir la longitud, y luego los estados \texttt{ST\_PROG\_B0} a \texttt{ST\_PROG\_B3} para reconstruir cada instrucción en \texttt{word\_buffer}. Finalmente, en \texttt{ST\_PROG\_WRITE\_WORD} se genera un pulso de escritura sobre la memoria de instrucciones y se actualiza la dirección de programación.
+
+Una vez cargado el programa, se ingresa en \texttt{ST\_PROG\_END}, desde donde se responde al host y luego se fuerza una secuencia de reset de ejecución controlada mediante \texttt{ST\_RESET\_EXEC}.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\subsection{Problemas encontrados durante el desarrollo}
+
+\subsubsection{Confusión inicial entre pausa y terminación}
+
+Uno de los primeros problemas conceptuales surgió al definir qué debía significar exactamente \texttt{CMD\_STOP}. Inicialmente aparecía la duda de si al detener el pipeline se debía también dar por terminada la ejecución. Sin embargo, eso entraba en conflicto con la idea de poder reanudar luego con \texttt{CMD\_RUN} o continuar paso a paso con \texttt{CMD\_STEP}.
+
+La solución adoptada fue separar claramente ambos conceptos:
+
+\begin{itemize}
+    \item \texttt{STOP} implica pausa externa y preservación completa del estado.
+    \item \texttt{HALT} implica fin interno, seguido de drenado del pipeline.
+\end{itemize}
+
+Esta separación permitió estabilizar la diferencia de los comandos y facilitó el diseño para el testbench.
+
+\subsubsection{Reanudación después de STOP}
+
+Otro problema importante apareció cuando se intentó ejecutar la secuencia \texttt{RUN + STOP + RUN}. El objetivo era que el primer \texttt{RUN} hiciera avanzar el procesador, que \texttt{STOP} lo congelara, y que un segundo \texttt{RUN} permitiera continuar sin perder el estado previo.
+
+Los fallos observados mostraban que, en algunos casos, luego del \texttt{STOP} el sistema parecía quedar en un estado desde el cual no lograba completarse una nueva ejecución, o bien el testbench esperaba una finalización que nunca llegaba. El análisis de los trazados permitió ver que una causa frecuente no era necesariamente un error de la FSM de pausa, sino el hecho de que el programa de prueba ya había alcanzado \texttt{HALT} antes de que llegara el \texttt{STOP}. En ese escenario, el \texttt{STOP} no estaba interrumpiendo una ejecución activa, sino actuando cuando el procesador ya había terminado naturalmente.
+
+La solución fue rediseñar el caso de prueba. En lugar de usar programas muy cortos que alcanzaban \texttt{HALT} casi inmediatamente, se definió un programa con bucle infinito que incrementa un registro en cada iteración. De esta manera, se pudo verificar realmente el comportamiento de pausa y reanudación: tras el primer \texttt{STOP}, el valor del registro quedaba congelado; tras el segundo \texttt{RUN}, el valor volvía a incrementarse. Esta evidencia confirmó que la semántica de pausa estaba correctamente implementada.
+
+\subsubsection{Problemas por programas demasiado cortos en el testbench}
+
+Relacionada con la dificultad anterior, se detectó que varios fallos reportados por el testbench no provenían del diseño de la \texttt{debug\_unit}, sino de la propia metodología de prueba. Programas de muy pocas instrucciones podían finalizar antes de que se enviara el comando \texttt{STOP}, lo cual generaba una interpretación engañosa del error.
+
+Para evitar esto, fue necesario revisar la estrategia de validación. Se decidió que:
+
+\begin{itemize}
+    \item los tests de \texttt{HALT} deben usar programas finitos y verificar el ingreso a \texttt{ST\_DRAIN},
+    \item los tests de \texttt{STOP} deben usar programas suficientemente largos o infinitos, de modo que el comando efectivamente interrumpa una ejecución en curso,
+    \item las rutinas del testbench que esperan \texttt{ST\_IDLE} deben contemplar que el sistema puede haber pasado antes por estados transitorios como \texttt{ST\_DRAIN}.
+\end{itemize}
+
+Esta separación entre casos de prueba mejoró significativamente la capacidad de diagnóstico.
+
+\subsubsection{Cantidad de ciclos de drenado}
+
+Otro punto que exigió ajuste fue la cantidad de ciclos requeridos en \texttt{ST\_DRAIN}. Si el número era insuficiente, algunas instrucciones no alcanzaban a completar \texttt{WB}; si era excesivo, el comportamiento seguía siendo correcto pero menos preciso y más difícil de justificar formalmente.
+
+La solución práctica inicial fue ajustar el contador de drenado observando trazas del pipeline y verificando en testbench que todos los resultados esperados quedaran escritos antes de declarar el fin del programa. Sin embargo, posteriormente se adoptó un criterio más robusto y preciso, reemplazando ese esquema fijo por una condición estructural basada en la detección explícita de vaciado del pipeline. En la implementación actual, la finalización del drenado se determina cuando todos los registros inter-etapa han finalizado, lo que permite concluir la ejecución de manera más fundamentada y consistente con el estado real del procesador.
+
+\subsection{Decisiones de diseño relevantes}
+
+\subsubsection{Uso de \texttt{ST\_IDLE} como estado de pausa}
+
+Como se mencionó, se decidió no crear un estado adicional de \textit{paused}. En su lugar, \texttt{ST\_IDLE} cumple dos funciones: esperar nuevos comandos y mantener el pipeline detenido. Esta decisión simplificó el diseño y fue consistente con el comportamiento deseado.
+
+\subsubsection{Separación entre pausa externa y fin interno}
+
+Distinguir \texttt{STOP} de \texttt{HALT} fue una de las decisiones más importantes del diseño. Sin esta separación, el comportamiento de reanudación habría sido ambiguo y el testbench mucho más difícil de estructurar. A nivel conceptual, \texttt{STOP} es una intervención del depurador que frena completamente la ejecución donde quedó; \texttt{HALT} es una propiedad del programa que se está ejecutando, que se utiliza tanto para el fin del programa como para breakpoints internos.
+
+\subsubsection{Reseteo controlado luego de cargar programa}
+
+Luego de programar la memoria de instrucciones, se resolvió forzar un reset de ejecución antes de permitir cualquier \texttt{RUN}. Esto garantizó que el procesador arranque desde un estado limpio y consistente con el programa recién cargado. Si no se hiciera esto, podrían persistir restos de una ejecución anterior en los registros inter-etapa.
+
+\subsubsection{Desacople entre recepción UART y decodificación de FSM}
+
+El uso del buffer \texttt{rx\_byte\_reg} con \texttt{rx\_byte\_valid} evitó depender de tiempos implícitos entre la FIFO y la lógica combinacional. Esta decisión mejoró la robustez y facilitó la depuración.
+
+\subsection{Validación mediante testbench}
+
+La validación se realizó mediante testbenches orientados a escenarios de uso reales. Entre los más importantes se incluyeron:
+
+\begin{itemize}
+    \item limpieza de memoria de instrucciones,
+    \item carga de programa y verificación de contenido,
+    \item ejecución continua hasta \texttt{HALT},
+    \item secuencia \texttt{RUN + STOP + RUN},
+    \item programas con bucle infinito para validar pausa y reanudación efectiva.
+\end{itemize}
+
+Uno de los resultados más representativos fue el ensayo con un lazo infinito que incrementa un registro. Durante la ejecución continua, el valor del registro aumentaba de forma sostenida. Tras enviar \texttt{STOP}, dicho valor quedaba congelado. Luego, al enviar un nuevo \texttt{RUN}, el conteo continuaba desde el valor previamente alcanzado. Esta prueba permitió concluir que la pausa preserva correctamente el estado del procesador, que la reanudación funciona como se esperaba y que el reloj no se interviene en ningún momento.

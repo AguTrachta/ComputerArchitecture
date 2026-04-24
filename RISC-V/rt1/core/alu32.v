@@ -1,0 +1,63 @@
+//  ADD     100000
+//  SUB     100010
+//  AND     100100
+//  OR      100101
+//  XOR     100110
+//  SRA     000011
+//  SRL     000010
+//  NOR     100111
+
+module alu32
+#(
+    parameter NB_DATA = 32,  // Data bits 
+    parameter NB_OP   = 6   // Data bits for operators 
+)
+(
+    input  wire signed  [NB_DATA - 1 : 0] i_data_a,
+    input  wire signed  [NB_DATA - 1 : 0] i_data_b,
+    input  wire         [NB_OP   - 1 : 0] i_op    ,
+    output wire signed  [NB_DATA - 1 : 0] o_result
+);
+
+    localparam ADD = 6'b100000;
+    localparam SUB = 6'b100010;
+    localparam AND = 6'b100100;
+    localparam OR  = 6'b100101;
+    localparam XOR = 6'b100110;
+    localparam SRA = 6'b000011; // Right Shift
+    localparam SRL = 6'b000010; // Logic Right Shift
+    localparam NOR = 6'b100111;
+    localparam SLL  = 6'b000001;
+    localparam SLT  = 6'b101010;
+    localparam SLTU = 6'b101011;
+    localparam LUI  = 6'b001111;
+
+    reg signed [NB_DATA-1 : 0] r_result = 0;
+    
+    // Para shift en RV32 se usan solo los 5 LSB (0..31)
+    wire [4:0] shamt = i_data_b[4:0];
+    
+    always @(*) begin
+    
+        case (i_op)
+            ADD     : r_result = i_data_a + i_data_b;
+            SUB     : r_result = i_data_a - i_data_b;
+            AND     : r_result = i_data_a & i_data_b;
+            OR      : r_result = i_data_a | i_data_b;
+            XOR     : r_result = i_data_a ^ i_data_b;
+            SRA     : r_result = i_data_a >>> shamt;
+            SRL     : r_result = $unsigned(i_data_a) >> shamt;
+            NOR     : r_result = ~(i_data_a | i_data_b);
+            SLL     : r_result = i_data_a << shamt;
+            SLT     : r_result = ($signed(i_data_a) < $signed(i_data_b)) ? 32'd1 : 32'd0;
+            SLTU    : r_result = ($unsigned(i_data_a) < $unsigned(i_data_b)) ? 32'd1 : 32'd0;
+            LUI     : r_result = i_data_b;  // imm_u ya viene desplazado 12 bits desde immgen
+            
+            default : r_result = {NB_DATA{1'b0}}; // All 0
+        endcase
+    
+    end
+    
+    assign o_result = r_result;
+
+endmodule

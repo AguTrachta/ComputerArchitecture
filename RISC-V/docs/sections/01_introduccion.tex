@@ -1,0 +1,15 @@
+\newpage
+
+\section{Introducción}
+
+Un \textit{pipeline} es una técnica de diseño de procesadores que busca mejorar el rendimiento dividiendo la ejecución de cada instrucción en una serie de etapas secuenciales. De este modo, varias instrucciones pueden avanzar simultáneamente por distintas fases del procesamiento, lo que permite un mejor aprovechamiento de los recursos del sistema.
+
+La arquitectura \textit{RISC-V}, basada en el paradigma \textit{Reduced Instruction Set Computer}, se destaca por su simplicidad, modularidad y carácter abierto. Estas características la convierten en una opción especialmente adecuada para estudiar la organización interna de un procesador y desarrollar implementaciones escalables, verificables y de complejidad controlada.
+
+En este trabajo se presenta el diseño, la implementación y la validación de un procesador \textit{RISC-V} segmentado de cinco etapas sobre una FPGA Basys 3. El sistema desarrollado corresponde a un procesador de 32 bits organizado en las etapas \textit{Instruction Fetch} (IF), \textit{Instruction Decode} (ID), \textit{Execute} (EX), \textit{Memory Access} (MEM) y \textit{Write Back} (WB).
+
+El objetivo principal es construir un \textit{pipeline} funcional capaz de ejecutar un subconjunto de instrucciones de la arquitectura RISC-V, garantizando el transporte correcto de datos y señales de control entre sus distintas etapas. Para ello, fue necesario diseñar tanto el camino de datos como la unidad de control, y resolver adecuadamente problemas asociados a dependencias de datos, riesgos de control y sincronización del flujo de ejecución.
+
+Además, se incorporan mecanismos de observabilidad y depuración que permiten inspeccionar el estado interno del sistema durante su funcionamiento. Con este fin, se desarrolló una \textit{Debug Unit} que se comunica con el procesador mediante comandos enviados por UART, posibilitando la carga de programas en memoria, la ejecución paso a paso, la detención controlada y el volcado de registros, memoria y registros inter-etapa del \textit{pipeline}.
+
+Este desarrollo integra módulos construidos en trabajos prácticos anteriores, en particular las unidades de ALU y UART (con leves modificaciones), incorporándolos dentro de una arquitectura más completa orientada no sólo a la ejecución de programas, sino también a su validación y depuración.

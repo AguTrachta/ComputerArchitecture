@@ -1,0 +1,21 @@
+# LaTeX auxiliary files
+*.aux
+*.bbl
+*.blg
+*.bcf
+*.brf
+*.fls
+*.fdb_latexmk
+*.idx
+*.ilg
+*.ind
+*.lof
+*.lot
+*.out
+*.toc
+*.synctex.gz
+*.run.xml
+*.sav
+*.bak
+*.dvi
+*.log
