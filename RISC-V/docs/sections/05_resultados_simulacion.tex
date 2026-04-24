@@ -21,25 +21,3 @@ En estas condiciones, el \textit{Program Counter} continúa incrementándose has
 Este punto fue relevante durante la etapa de pruebas, ya que permitió confirmar que la finalización del programa no debía depender únicamente del agotamiento del código cargado, sino de una condición explícita de parada. También ayudó a validar la necesidad de contar con mecanismos externos de control, como \texttt{CMD\_STOP}, para abortar la ejecución en cualquier momento desde la interfaz de depuración.
 
 A su vez, el análisis de este caso permitió ajustar el comportamiento del sistema ante la detección de \texttt{HALT}. En particular, fue importante distinguir entre detener inmediatamente el ingreso de nuevas instrucciones y permitir que las que ya estaban dentro del pipeline terminaran su recorrido. Esta dificultad llevó a refinar la lógica de vaciado dinámico del pipeline, evitando soluciones rígidas basadas únicamente en una cantidad fija de ciclos.
-
-\subsection{Capturas de Simulación}
-A continuación, se referencian los \textit{waveforms} obtenidos en la herramienta de simulación, los cuales permiten observar de manera directa el comportamiento temporal del procesador y de la unidad de depuración ante los distintos casos ensayados.
-
-En estas capturas resulta especialmente útil mostrar:
-\begin{itemize}
-    \item la evolución del \textit{Program Counter},
-    \item el contenido de las instrucciones en cada etapa del pipeline,
-    \item las señales de \texttt{stall}, \texttt{flush} y \texttt{forwarding},
-    \item la escritura en el banco de registros,
-    \item los accesos a memoria de datos,
-    \item y la transición de estados de la \textit{Debug Unit}.
-\end{itemize}
-
-Estas observaciones permiten relacionar el comportamiento esperado a nivel teórico con su implementación efectiva en hardware descriptivo, y fueron fundamentales para verificar que la resolución de riesgos, saltos y detenciones estuviera ocurriendo en el momento correcto.
-
-% A COMPLETAR: Agregar aquí las capturas de pantalla resolutivas de los testbenchs del programa. Se recomienda utilizar el siguiente formato:
-% \begin{figure}[h] 
-%   \centering 
-%   \includegraphics[width=0.8\textwidth]{img/nombre_archivo.png} 
-%   \caption{Descripción del waveform capturado.} 
-% \end{figure}
